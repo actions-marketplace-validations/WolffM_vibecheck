@@ -133,16 +133,23 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Setup Trunk
-        uses: trunk-io/trunk-action@v1
+        uses: trunk-io/trunk-action/setup@v1
+        # This installs Trunk CLI without running checks
+        # We'll run it ourselves via the analyze script
+
+      - name: Setup Python (for Semgrep)
+        uses: actions/setup-python@v5
         with:
-          check-mode: all
-          # Don't fail on lint errors - we capture them
-          continue-on-error: true
+          python-version: '3.11'
+
+      - name: Install Semgrep
+        run: pip install semgrep
 
       - name: Run Analysis
         id: analyze
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           cd ${{ github.workspace }}
 

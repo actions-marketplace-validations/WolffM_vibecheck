@@ -19,6 +19,7 @@ import {
   parseTrunkOutput,
   parseDepcruiseOutput,
   parseKnipOutput,
+  parseSemgrepOutput,
 } from './parsers.js';
 import { buildSarifLog, writeSarifFile } from './build-sarif.js';
 import { buildLlmJson, writeLlmJsonFile } from './build-llm-json.js';
@@ -129,9 +130,21 @@ function runTrunk(rootPath: string, args: string[] = ['check']): Finding[] {
   console.log('Running Trunk...');
 
   try {
+    // Check if trunk is available
+    const versionCheck = spawnSync('trunk', ['--version'], {
+      encoding: 'utf-8',
+      shell: true,
+    });
+
+    if (versionCheck.error || versionCheck.status !== 0) {
+      console.log('  Trunk not installed, skipping');
+      return [];
+    }
+
     const trunkResult = spawnSync('trunk', [...args, '--output=json'], {
       cwd: rootPath,
       encoding: 'utf-8',
+      shell: true,
       maxBuffer: 50 * 1024 * 1024, // 50MB
     });
 
@@ -334,6 +347,70 @@ function runKnip(rootPath: string, configPath?: string): Finding[] {
   return [];
 }
 
+/**
+ * Run Semgrep for security vulnerability detection.
+ * Note: Semgrep may have encoding issues on Windows - works best on Linux/CI.
+ */
+function runSemgrep(rootPath: string, configPath?: string): Finding[] {
+  console.log('Running semgrep...');
+
+  try {
+    // Check if semgrep is available
+    const versionCheck = spawnSync('semgrep', ['--version'], {
+      encoding: 'utf-8',
+      shell: true,
+    });
+
+    if (versionCheck.error || versionCheck.status !== 0) {
+      console.log('  Semgrep not installed, skipping');
+      return [];
+    }
+
+    const args = [
+      'scan',
+      '--json',
+      '--config', configPath || 'auto',  // 'auto' uses default security rules
+      '--no-git-ignore',  // scan all files
+      '.',
+    ];
+
+    const result = spawnSync('semgrep', args, {
+      cwd: rootPath,
+      encoding: 'utf-8',
+      shell: true,
+      maxBuffer: 50 * 1024 * 1024,
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: 'utf-8',  // Help with Windows encoding issues
+      },
+    });
+
+    const output = result.stdout;
+    if (output && output.trim().startsWith('{')) {
+      try {
+        const semgrepOutput = JSON.parse(output);
+        return parseSemgrepOutput(semgrepOutput);
+      } catch (e) {
+        console.warn('Failed to parse semgrep JSON output:', e);
+      }
+    }
+
+    // Handle known Windows encoding issues gracefully
+    if (result.stderr && result.stderr.includes('charmap')) {
+      console.log('  Semgrep has encoding issues on Windows, skipping (will work on Linux/CI)');
+      return [];
+    }
+
+    if (result.stderr && !result.stderr.includes('Ran')) {
+      console.log('  semgrep stderr:', result.stderr.substring(0, 200));
+    }
+  } catch (error) {
+    console.warn('semgrep failed:', error);
+  }
+
+  return [];
+}
+
 // ============================================================================
 // Main Analysis Pipeline
 // ============================================================================
@@ -433,6 +510,13 @@ export async function analyze(options: AnalyzeOptions = {}): Promise<AnalyzeResu
     const knipFindings = runKnip(rootPath, config.tools?.knip?.config_path);
     allFindings.push(...knipFindings);
     console.log(`  knip: ${knipFindings.length} findings`);
+  }
+
+  // semgrep (weekly/monthly for security scanning)
+  if (shouldRunTool(config.tools?.semgrep?.enabled || 'weekly', profile, cadence, () => true)) {
+    const semgrepFindings = runSemgrep(rootPath, config.tools?.semgrep?.config);
+    allFindings.push(...semgrepFindings);
+    console.log(`  semgrep: ${semgrepFindings.length} findings`);
   }
 
   console.log('');
