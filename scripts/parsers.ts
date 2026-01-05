@@ -9,12 +9,9 @@
 import { fingerprintFinding } from "./fingerprints.js";
 import {
   classifyLayer,
-  determineAutofixLevel,
   estimateEffort,
   mapDepcruiseConfidence,
   mapDepcruiseSeverity,
-  mapEslintConfidence,
-  mapEslintSeverity,
   mapJscpdConfidence,
   mapJscpdSeverity,
   mapKnipConfidence,
@@ -25,66 +22,11 @@ import {
   mapTscSeverity,
 } from "./scoring.js";
 import type {
-  EslintFileResult,
   Finding,
   JscpdOutput,
   Location,
   TscDiagnostic,
 } from "./types.js";
-
-// ============================================================================
-// ESLint Parser
-// ============================================================================
-
-/**
- * Parse ESLint JSON output into Findings.
- */
-export function parseEslintOutput(results: EslintFileResult[]): Finding[] {
-  const findings: Finding[] = [];
-
-  for (const file of results) {
-    for (const msg of file.messages) {
-      if (!msg.ruleId) continue; // Skip messages without rule IDs (parse errors)
-
-      const location: Location = {
-        path: file.filePath,
-        startLine: msg.line,
-        startColumn: msg.column,
-        endLine: msg.endLine,
-        endColumn: msg.endColumn,
-      };
-
-      const severity = mapEslintSeverity(msg.severity);
-      const confidence = mapEslintConfidence(msg.ruleId);
-      const hasAutofix = !!msg.fix;
-      const autofix = determineAutofixLevel("eslint", msg.ruleId, hasAutofix);
-      const effort = estimateEffort("eslint", msg.ruleId, 1, hasAutofix);
-      const layer = classifyLayer("eslint", msg.ruleId);
-
-      const finding: Omit<Finding, "fingerprint"> = {
-        layer,
-        tool: "eslint",
-        ruleId: msg.ruleId,
-        title: `ESLint: ${msg.ruleId}`,
-        message: msg.message,
-        severity,
-        confidence,
-        effort,
-        autofix,
-        locations: [location],
-        labels: ["vibeCop", `tool:eslint`, `severity:${severity}`],
-        rawOutput: msg,
-      };
-
-      findings.push({
-        ...finding,
-        fingerprint: fingerprintFinding(finding),
-      });
-    }
-  }
-
-  return findings;
-}
 
 // ============================================================================
 // TypeScript Parser
@@ -222,7 +164,7 @@ export function parseJscpdOutput(output: JscpdOutput): Finding[] {
 // dependency-cruiser Parser
 // ============================================================================
 
-export interface DepcruiseViolation {
+interface DepcruiseViolation {
   type?: string;
   from: string;
   to: string;
@@ -299,14 +241,14 @@ export function parseDepcruiseOutput(output: DepcruiseOutput): Finding[] {
 // knip Parser
 // ============================================================================
 
-export interface KnipIssueItem {
+interface KnipIssueItem {
   name: string;
   line?: number;
   col?: number;
   pos?: number;
 }
 
-export interface KnipFileIssues {
+interface KnipFileIssues {
   file: string;
   dependencies: KnipIssueItem[];
   devDependencies: KnipIssueItem[];
@@ -464,7 +406,7 @@ function createKnipFinding(
 // Semgrep Parser
 // ============================================================================
 
-export interface SemgrepResult {
+interface SemgrepResult {
   check_id: string;
   path: string;
   start: { line: number; col: number };
@@ -540,7 +482,7 @@ export function parseSemgrepOutput(output: SemgrepOutput): Finding[] {
 // Trunk Parser
 // ============================================================================
 
-export interface TrunkIssue {
+interface TrunkIssue {
   file: string;
   line: number;
   column: number;

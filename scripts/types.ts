@@ -10,44 +10,44 @@
 // ============================================================================
 
 export type Cadence = 'daily' | 'weekly' | 'monthly';
-export type ToolEnablement = 'auto' | boolean | Cadence;
+type ToolEnablement = 'auto' | boolean | Cadence;
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 export type Confidence = 'low' | 'medium' | 'high';
 export type Effort = 'S' | 'M' | 'L';
 export type AutofixLevel = 'none' | 'safe' | 'requires_review';
 export type Layer = 'code' | 'architecture' | 'system' | 'security';
 
-export interface ToolConfig {
+interface ToolConfig {
   enabled: ToolEnablement;
   [key: string]: unknown;
 }
 
-export interface TscConfig extends ToolConfig {
+interface TscConfig extends ToolConfig {
   // inherits enabled
 }
 
-export interface EslintConfig extends ToolConfig {
+interface EslintConfig extends ToolConfig {
   config_path?: string;
 }
 
-export interface PrettierConfig extends ToolConfig {
+interface PrettierConfig extends ToolConfig {
   config_path?: string;
 }
 
-export interface JscpdConfig extends ToolConfig {
+interface JscpdConfig extends ToolConfig {
   min_tokens?: number;
   threshold?: number; // percent duplication threshold
 }
 
-export interface DependencyCruiserConfig extends ToolConfig {
+interface DependencyCruiserConfig extends ToolConfig {
   config_path?: string;
 }
 
-export interface KnipConfig extends ToolConfig {
+interface KnipConfig extends ToolConfig {
   config_path?: string;
 }
 
-export interface SemgrepConfig extends ToolConfig {
+interface SemgrepConfig extends ToolConfig {
   config?: string;
   rules_path?: string;
 }
@@ -104,47 +104,6 @@ export interface VibeCopConfig {
   output?: OutputConfig;
   llm?: LlmConfig;
 }
-
-export const DEFAULT_CONFIG: VibeCopConfig = {
-  version: 1,
-  schedule: {
-    cadence: 'weekly',
-    deep_scan: false,
-  },
-  trunk: {
-    enabled: true,
-    arguments: 'check',
-    extra_args: [],
-  },
-  tools: {
-    tsc: { enabled: 'auto' },
-    eslint: { enabled: 'auto' },
-    prettier: { enabled: 'auto' },
-    jscpd: { enabled: 'weekly', min_tokens: 70, threshold: 1 },
-    dependency_cruiser: { enabled: 'weekly' },
-    knip: { enabled: 'monthly' },
-    semgrep: { enabled: 'monthly', config: 'p/default' },
-  },
-  issues: {
-    enabled: true,
-    label: 'vibeCop',
-    max_new_per_run: 25,
-    severity_threshold: 'medium',
-    confidence_threshold: 'high',
-    close_resolved: false,
-    assignees: [],
-    project: null,
-  },
-  output: {
-    sarif: true,
-    llm_json: true,
-    artifact_retention_days: 14,
-  },
-  llm: {
-    agent_hint: 'codex',
-    pr_branch_prefix: 'vibecop/',
-  },
-};
 
 // ============================================================================
 // Repo Detection Types
@@ -256,19 +215,19 @@ export interface SarifMessage {
   text: string;
 }
 
-export interface SarifArtifactLocation {
+interface SarifArtifactLocation {
   uri: string;
   uriBaseId?: string;
 }
 
-export interface SarifRegion {
+interface SarifRegion {
   startLine: number;
   startColumn?: number;
   endLine?: number;
   endColumn?: number;
 }
 
-export interface SarifPhysicalLocation {
+interface SarifPhysicalLocation {
   artifactLocation: SarifArtifactLocation;
   region?: SarifRegion;
 }
@@ -304,7 +263,7 @@ export interface SarifRule {
   properties?: Record<string, unknown>;
 }
 
-export interface SarifToolDriver {
+interface SarifToolDriver {
   name: string;
   version?: string;
   informationUri?: string;
@@ -435,21 +394,6 @@ export interface JscpdOutput {
       percentage: number;
     };
   };
-}
-
-export interface TrunkCheckResult {
-  linters: {
-    name: string;
-    files_scanned: number;
-    issues: {
-      file: string;
-      line: number;
-      column: number;
-      message: string;
-      code: string;
-      level: string;
-    }[];
-  }[];
 }
 
 // ============================================================================

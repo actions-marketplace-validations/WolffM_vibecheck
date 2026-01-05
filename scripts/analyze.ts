@@ -445,8 +445,8 @@ export interface AnalyzeOptions {
   cadence?: Cadence;
   outputDir?: string;
   skipIssues?: boolean;
-  severityThreshold?: string;
-  confidenceThreshold?: string;
+  severityThreshold?: Severity | "info";
+  confidenceThreshold?: Confidence;
   mergeStrategy?: MergeStrategy;
 }
 
@@ -721,6 +721,44 @@ export async function analyze(
 }
 
 // ============================================================================
+// CLI Validation Helpers
+// ============================================================================
+
+/**
+ * Validate and parse severity threshold from CLI input.
+ * Throws an error if the value is invalid.
+ */
+function parseSeverityThreshold(value: string): Severity | "info" {
+  const validValues: Array<Severity | "info"> = [
+    "info",
+    "low",
+    "medium",
+    "high",
+    "critical",
+  ];
+  if (validValues.includes(value as Severity | "info")) {
+    return value as Severity | "info";
+  }
+  throw new Error(
+    `Invalid severity threshold: '${value}'. Must be one of: ${validValues.join(", ")}`,
+  );
+}
+
+/**
+ * Validate and parse confidence threshold from CLI input.
+ * Throws an error if the value is invalid.
+ */
+function parseConfidenceThreshold(value: string): Confidence {
+  const validValues: Confidence[] = ["low", "medium", "high"];
+  if (validValues.includes(value as Confidence)) {
+    return value as Confidence;
+  }
+  throw new Error(
+    `Invalid confidence threshold: '${value}'. Must be one of: ${validValues.join(", ")}`,
+  );
+}
+
+// ============================================================================
 // CLI Entry Point
 // ============================================================================
 
@@ -746,9 +784,9 @@ async function main() {
     } else if (arg === "--skip-issues") {
       options.skipIssues = true;
     } else if (arg === "--severity-threshold" && args[i + 1]) {
-      options.severityThreshold = args[++i];
+      options.severityThreshold = parseSeverityThreshold(args[++i]);
     } else if (arg === "--confidence-threshold" && args[i + 1]) {
-      options.confidenceThreshold = args[++i];
+      options.confidenceThreshold = parseConfidenceThreshold(args[++i]);
     } else if (arg === "--merge-strategy" && args[i + 1]) {
       options.mergeStrategy = args[++i] as MergeStrategy;
     }
