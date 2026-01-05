@@ -597,8 +597,8 @@ export async function analyze(
     issues: {
       ...DEFAULT_CONFIG.issues!,
       ...config.issues,
-      severity_threshold: severityThreshold as any,
-      confidence_threshold: confidenceThreshold as any,
+      severity_threshold: severityThreshold as Severity | 'info',
+      confidence_threshold: confidenceThreshold as Confidence,
     },
   };
 
