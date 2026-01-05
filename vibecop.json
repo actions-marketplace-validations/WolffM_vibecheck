@@ -4,6 +4,14 @@
     "jscpd": {
       "enabled": true,
       "min_tokens": 50
+    },
+    "dependency_cruiser": {
+      "enabled": true,
+      "config_path": ".dependency-cruiser.cjs"
+    },
+    "knip": {
+      "enabled": true,
+      "config_path": "knip.json"
     }
   },
   "issues": {

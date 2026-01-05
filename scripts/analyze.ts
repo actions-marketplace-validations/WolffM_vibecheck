@@ -17,6 +17,8 @@ import {
   parseTscOutput,
   parseJscpdOutput,
   parseTrunkOutput,
+  parseDepcruiseOutput,
+  parseKnipOutput,
 } from './parsers.js';
 import { buildSarifLog, writeSarifFile } from './build-sarif.js';
 import { buildLlmJson, writeLlmJsonFile } from './build-llm-json.js';
@@ -246,6 +248,92 @@ function runJscpd(rootPath: string, minTokens: number = 70): Finding[] {
   return [];
 }
 
+/**
+ * Run dependency-cruiser for circular dependencies and architecture violations.
+ */
+function runDependencyCruiser(rootPath: string, configPath?: string): Finding[] {
+  console.log('Running dependency-cruiser...');
+
+  const config = configPath || '.dependency-cruiser.cjs';
+  const fullConfigPath = join(rootPath, config);
+
+  if (!existsSync(fullConfigPath)) {
+    console.log(`  No config found at ${config}, skipping`);
+    return [];
+  }
+
+  try {
+    const result = spawnSync(
+      'pnpm',
+      ['exec', 'dependency-cruiser', 'scripts', 'test-fixtures', '--config', config, '--output-type', 'json'],
+      {
+        cwd: rootPath,
+        encoding: 'utf-8',
+        shell: true,
+        maxBuffer: 50 * 1024 * 1024,
+      }
+    );
+
+    // dependency-cruiser outputs JSON to stdout even with violations
+    const output = result.stdout;
+    if (output && output.trim().startsWith('{')) {
+      try {
+        const depcruiseOutput = JSON.parse(output);
+        return parseDepcruiseOutput(depcruiseOutput);
+      } catch (e) {
+        console.warn('Failed to parse dependency-cruiser JSON output:', e);
+      }
+    }
+  } catch (error) {
+    console.warn('dependency-cruiser failed:', error);
+  }
+
+  return [];
+}
+
+/**
+ * Run knip for unused exports and dead code detection.
+ */
+function runKnip(rootPath: string, configPath?: string): Finding[] {
+  console.log('Running knip...');
+
+  const config = configPath || 'knip.json';
+  const fullConfigPath = join(rootPath, config);
+
+  if (!existsSync(fullConfigPath)) {
+    console.log(`  No config found at ${config}, skipping`);
+    return [];
+  }
+
+  try {
+    const result = spawnSync(
+      'pnpm',
+      ['exec', 'knip', '--reporter', 'json'],
+      {
+        cwd: rootPath,
+        encoding: 'utf-8',
+        shell: true,
+        maxBuffer: 50 * 1024 * 1024,
+      }
+    );
+
+    // knip outputs JSON to stdout, exits with code 1 if issues found
+    const output = result.stdout;
+    if (output && output.trim().startsWith('{')) {
+      try {
+        const knipOutput = JSON.parse(output);
+        return parseKnipOutput(knipOutput);
+      } catch (e) {
+        console.warn('Failed to parse knip JSON output:', e);
+      }
+    }
+  } catch (error) {
+    console.warn('knip failed:', error);
+  }
+
+  return [];
+}
+
 // ============================================================================
 // Main Analysis Pipeline
 // ============================================================================
@@ -331,6 +419,20 @@ export async function analyze(options: AnalyzeOptions = {}): Promise<AnalyzeResu
     const jscpdFindings = runJscpd(rootPath, config.tools?.jscpd?.min_tokens);
     allFindings.push(...jscpdFindings);
     console.log(`  jscpd: ${jscpdFindings.length} findings`);
+  }
+
+  // dependency-cruiser (weekly/monthly)
+  if (shouldRunTool(config.tools?.dependency_cruiser?.enabled || 'weekly', profile, cadence, () => profile.hasDependencyCruiser)) {
+    const depcruiseFindings = runDependencyCruiser(rootPath, config.tools?.dependency_cruiser?.config_path);
+    allFindings.push(...depcruiseFindings);
+    console.log(`  dependency-cruiser: ${depcruiseFindings.length} findings`);
+  }
+
+  // knip (monthly)
+  if (shouldRunTool(config.tools?.knip?.enabled || 'monthly', profile, cadence, () => profile.hasKnip)) {
+    const knipFindings = runKnip(rootPath, config.tools?.knip?.config_path);
+    allFindings.push(...knipFindings);
+    console.log(`  knip: ${knipFindings.length} findings`);
   }
 
   console.log('');

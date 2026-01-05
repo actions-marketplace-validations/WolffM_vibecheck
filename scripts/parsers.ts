@@ -223,17 +223,21 @@ export function parseJscpdOutput(output: JscpdOutput): Finding[] {
 // ============================================================================
 
 export interface DepcruiseViolation {
+  type?: string;
   from: string;
   to: string;
   rule: {
     name: string;
     severity: string;
   };
-  cycle?: string[];
+  cycle?: Array<{ name: string; dependencyTypes: string[] }>;
 }
 
 export interface DepcruiseOutput {
-  violations: DepcruiseViolation[];
+  summary?: {
+    violations: DepcruiseViolation[];
+  };
+  violations?: DepcruiseViolation[];
 }
 
 /**
@@ -242,20 +246,24 @@ export interface DepcruiseOutput {
 export function parseDepcruiseOutput(output: DepcruiseOutput): Finding[] {
   const findings: Finding[] = [];
 
-  for (const violation of output.violations) {
+  // Handle both top-level violations and summary.violations
+  const violations = output.violations || output.summary?.violations || [];
+
+  for (const violation of violations) {
     const location: Location = {
       path: violation.from,
       startLine: 1, // dependency-cruiser doesn't provide line numbers
     };
 
-    const violationType = violation.cycle ? 'cycle' : violation.rule.name;
+    const violationType = violation.type || violation.rule.name;
     const severity = mapDepcruiseSeverity(violationType);
     const confidence = mapDepcruiseConfidence(violationType);
     const effort = estimateEffort('dependency-cruiser', violationType, 1, false);
 
     let message = `Dependency violation: ${violation.from} -> ${violation.to}`;
     if (violation.cycle) {
-      message = `Circular dependency detected: ${violation.cycle.join(' -> ')}`;
+      const cycleNames = violation.cycle.map(c => c.name);
+      message = `Circular dependency detected: ${[violation.from, ...cycleNames].join(' -> ')}`;
     }
 
     const finding: Omit<Finding, 'fingerprint'> = {
@@ -286,15 +294,31 @@ export function parseDepcruiseOutput(output: DepcruiseOutput): Finding[] {
 // knip Parser
 // ============================================================================
 
-export interface KnipIssue {
-  type: 'files' | 'dependencies' | 'devDependencies' | 'exports' | 'types' | 'duplicates';
-  filePath: string;
-  symbol?: string;
+export interface KnipIssueItem {
+  name: string;
   line?: number;
+  col?: number;
+  pos?: number;
+}
+
+export interface KnipFileIssues {
+  file: string;
+  dependencies: KnipIssueItem[];
+  devDependencies: KnipIssueItem[];
+  optionalPeerDependencies: KnipIssueItem[];
+  unlisted: KnipIssueItem[];
+  binaries: KnipIssueItem[];
+  unresolved: KnipIssueItem[];
+  exports: KnipIssueItem[];
+  types: KnipIssueItem[];
+  enumMembers: Record<string, unknown>;
+  duplicates: KnipIssueItem[];
+  catalog: unknown[];
 }
 
 export interface KnipOutput {
-  issues: KnipIssue[];
+  files: string[];
+  issues: KnipFileIssues[];
 }
 
 /**
@@ -303,70 +327,120 @@ export interface KnipOutput {
 export function parseKnipOutput(output: KnipOutput): Finding[] {
   const findings: Finding[] = [];
 
-  for (const issue of output.issues) {
-    const location: Location = {
-      path: issue.filePath,
-      startLine: issue.line ?? 1,
-    };
+  // Handle unused files
+  for (const file of output.files || []) {
+    const finding = createKnipFinding('files', file, 'unused-file', 1);
+    findings.push(finding);
+  }
 
-    const severity = mapKnipSeverity(issue.type);
-    const confidence = mapKnipConfidence(issue.type);
-    const effort = estimateEffort('knip', issue.type, 1, false);
+  // Handle per-file issues
+  for (const fileIssues of output.issues || []) {
+    const filePath = fileIssues.file;
 
-    let message: string;
-    let title: string;
-    switch (issue.type) {
-      case 'files':
-        message = `Unused file: ${issue.filePath}`;
-        title = 'Unused File';
-        break;
-      case 'dependencies':
-        message = `Unused dependency: ${issue.symbol}`;
-        title = 'Unused Dependency';
-        break;
-      case 'devDependencies':
-        message = `Unused dev dependency: ${issue.symbol}`;
-        title = 'Unused Dev Dependency';
-        break;
-      case 'exports':
-        message = `Unused export: ${issue.symbol} in ${issue.filePath}`;
-        title = 'Unused Export';
-        break;
-      case 'types':
-        message = `Unused type: ${issue.symbol} in ${issue.filePath}`;
-        title = 'Unused Type';
-        break;
-      case 'duplicates':
-        message = `Duplicate export: ${issue.symbol}`;
-        title = 'Duplicate Export';
-        break;
-      default:
-        message = `Knip issue: ${issue.type}`;
-        title = `Knip: ${issue.type}`;
+    // Unused exports
+    for (const exp of fileIssues.exports || []) {
+      findings.push(createKnipFinding('exports', filePath, exp.name, exp.line ?? 1));
     }
 
-    const finding: Omit<Finding, 'fingerprint'> = {
-      layer: 'architecture',
-      tool: 'knip',
-      ruleId: issue.type,
-      title,
-      message,
-      severity,
-      confidence,
-      effort,
-      autofix: 'none',
-      locations: [location],
-      labels: ['vibeCop', 'tool:knip', `severity:${severity}`],
-      rawOutput: issue,
-    };
+    // Unused types
+    for (const type of fileIssues.types || []) {
+      findings.push(createKnipFinding('types', filePath, type.name, type.line ?? 1));
+    }
 
-    findings.push({
-      ...finding,
-      fingerprint: fingerprintFinding(finding),
-    });
+    // Unused dependencies
+    for (const dep of fileIssues.dependencies || []) {
+      findings.push(createKnipFinding('dependencies', filePath, dep.name, dep.line ?? 1));
+    }
+
+    // Unused dev dependencies
+    for (const dep of fileIssues.devDependencies || []) {
+      findings.push(createKnipFinding('devDependencies', filePath, dep.name, dep.line ?? 1));
+    }
+
+    // Unlisted dependencies
+    for (const dep of fileIssues.unlisted || []) {
+      findings.push(createKnipFinding('unlisted', filePath, dep.name, dep.line ?? 1));
+    }
+
+    // Duplicates
+    for (const dup of fileIssues.duplicates || []) {
+      findings.push(createKnipFinding('duplicates', filePath, dup.name, dup.line ?? 1));
+    }
   }
 
   return findings;
+}
+
+function createKnipFinding(
+  type: string,
+  filePath: string,
+  symbol: string,
+  line: number
+): Finding {
+  const location: Location = {
+    path: filePath,
+    startLine: line,
+  };
+
+  const severity = mapKnipSeverity(type);
+  const confidence = mapKnipConfidence(type);
+  const effort = estimateEffort('knip', type, 1, false);
+
+  let message: string;
+  let title: string;
+  switch (type) {
+    case 'files':
+      message = `Unused file: ${filePath}`;
+      title = 'Unused File';
+      break;
+    case 'dependencies':
+      message = `Unused dependency: ${symbol}`;
+      title = 'Unused Dependency';
+      break;
+    case 'devDependencies':
+      message = `Unused dev dependency: ${symbol}`;
+      title = 'Unused Dev Dependency';
+      break;
+    case 'exports':
+      message = `Unused export: ${symbol} in ${filePath}`;
+      title = 'Unused Export';
+      break;
+    case 'types':
+      message = `Unused type: ${symbol} in ${filePath}`;
+      title = 'Unused Type';
+      break;
+    case 'unlisted':
+      message = `Unlisted dependency: ${symbol} used in ${filePath}`;
+      title = 'Unlisted Dependency';
+      break;
+    case 'duplicates':
+      message = `Duplicate export: ${symbol}`;
+      title = 'Duplicate Export';
+      break;
+    default:
+      message = `Knip issue: ${type} - ${symbol}`;
+      title = `Knip: ${type}`;
+  }
+
+  const finding: Omit<Finding, 'fingerprint'> = {
+    layer: 'architecture',
+    tool: 'knip',
+    ruleId: type,
+    title,
+    message,
+    severity,
+    confidence,
+    effort,
+    autofix: 'none',
+    locations: [location],
+    labels: ['vibeCop', 'tool:knip', `severity:${severity}`],
+    rawOutput: { type, filePath, symbol, line },
+  };
+
+  return {
+    ...finding,
+    fingerprint: fingerprintFinding(finding),
+  };
 }
 
 // ============================================================================
