@@ -595,6 +595,7 @@ export async function analyze(
   const mergedConfig: VibeCopConfig = {
     ...config,
     issues: {
+      // DEFAULT_CONFIG.issues is always defined (non-null assertion is safe)
       ...DEFAULT_CONFIG.issues!,
       ...config.issues,
       severity_threshold: severityThreshold as Severity | 'info',
