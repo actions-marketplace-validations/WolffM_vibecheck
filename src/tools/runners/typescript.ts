@@ -26,8 +26,10 @@ import {
   parseJscpdOutput,
   parseDepcruiseOutput,
   parseKnipOutput,
+  parseEslintOutput,
   type DepcruiseOutput,
   type KnipOutput,
+  type EslintOutput,
 } from "../../parsers.js";
 
 // ESM equivalent of __dirname
@@ -286,6 +288,89 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
     }
   } catch (error) {
     console.warn("knip failed:", error);
+  }
+
+  return [];
+}
+
+/**
+ * Run ESLint for JavaScript/TypeScript linting.
+ * Runs as a standalone tool (not through Trunk) to ensure config is loaded properly.
+ */
+export function runEslint(rootPath: string): Finding[] {
+  console.log("Running ESLint...");
+
+  try {
+    // Check if ESLint is available
+    const { available, useNpx } = isToolAvailable("eslint");
+    if (!available) {
+      console.log("  ESLint not installed, skipping");
+      return [];
+    }
+
+    // Check for ESLint config
+    const configFile = findConfigFile(rootPath, [
+      "eslint.config.mjs",
+      "eslint.config.js",
+      "eslint.config.cjs",
+      ".eslintrc.js",
+      ".eslintrc.cjs",
+      ".eslintrc.json",
+      ".eslintrc.yml",
+      ".eslintrc.yaml",
+    ]);
+
+    if (!configFile) {
+      console.log("  No ESLint config found, skipping");
+      return [];
+    }
+
+    console.log(`  Using config: ${configFile}`);
+
+    // Find source directories to scan
+    const srcDirs = findSourceDirs(rootPath, [
+      "src",
+      "lib",
+      "app",
+      "test-fixtures",
+    ]);
+
+    if (srcDirs.length === 0) {
+      console.log("  No source directories found");
+      return [];
+    }
+
+    // Run ESLint with JSON output
+    const args = [
+      ...srcDirs,
+      "--format", "json",
+      "--no-error-on-unmatched-pattern",
+    ];
+
+    const result = runTool("eslint", args, { cwd: rootPath, useNpx });
+
+    // ESLint exits with code 1 when there are linting errors
+    // The JSON output is in stdout regardless
+    const output = result.stdout || "";
+
+    if (!output.trim()) {
+      console.log("  No output from ESLint");
+      return [];
+    }
+
+    const parsed = safeParseJson<EslintOutput>(output);
+    if (parsed) {
+      const findings = parseEslintOutput(parsed);
+      console.log(`  Found ${findings.length} findings`);
+      return findings;
+    } else {
+      console.log("  Failed to parse ESLint output");
+      if (result.stderr) {
+        console.log(`  stderr: ${result.stderr.substring(0, 200)}`);
+      }
+    }
+  } catch (error) {
+    console.warn("ESLint failed:", error);
   }
 
   return [];

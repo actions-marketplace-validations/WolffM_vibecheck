@@ -22,6 +22,7 @@ import {
   runJscpd,
   runDependencyCruiser,
   runKnip,
+  runEslint,
   runSemgrep,
   runRuff,
   runMypy,
@@ -56,6 +57,10 @@ export interface ToolDefinition {
 /**
  * Map of tool names to their Trunk linter equivalents.
  * Used to check if Trunk has these linters enabled before skipping.
+ *
+ * Note: ESLint is NOT in this map because Trunk's ESLint often fails to load
+ * the project's ESLint config due to missing dependencies. We run ESLint
+ * standalone to ensure the project's config is properly loaded.
  */
 const TOOL_TO_TRUNK_LINTER: Record<string, string> = {
   ruff: "ruff",
@@ -84,6 +89,14 @@ const TOOL_REGISTRY: ToolDefinition[] = [
     detector: (p) => p.hasTypeScript,
     run: (rootPath) => runTsc(rootPath),
     configKey: "tsc",
+  },
+  {
+    name: "eslint",
+    displayName: "ESLint",
+    defaultCadence: "daily",
+    detector: (p) => p.hasTypeScript || p.languages.includes("javascript"),
+    run: (rootPath) => runEslint(rootPath),
+    configKey: "eslint",
   },
 
   // Weekly tools - more expensive analysis

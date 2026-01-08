@@ -19,6 +19,7 @@ export {
   runJscpd,
   runDependencyCruiser,
   runKnip,
+  runEslint,
 } from "./runners/typescript.js";
 export { runRuff, runMypy, runBandit } from "./runners/python.js";
 export { runPmd, runSpotBugs } from "./runners/java.js";

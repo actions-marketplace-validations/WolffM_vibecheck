@@ -344,6 +344,102 @@ function createKnipFinding(
 }
 
 // ============================================================================
+// ESLint Parser
+// ============================================================================
+
+interface EslintMessage {
+  ruleId: string | null;
+  severity: 1 | 2;  // 1 = warning, 2 = error
+  message: string;
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+  fix?: { range: [number, number]; text: string };
+}
+
+interface EslintFileResult {
+  filePath: string;
+  messages: EslintMessage[];
+  errorCount: number;
+  warningCount: number;
+}
+
+export type EslintOutput = EslintFileResult[];
+
+/** Map ESLint severity to Finding severity */
+function mapEslintSeverity(severity: 1 | 2, ruleId: string | null): Finding["severity"] {
+  // Security-related rules are always high
+  if (ruleId?.includes("security") || ruleId?.includes("injection")) {
+    return "high";
+  }
+  // ESLint errors are medium, warnings are low
+  return severity === 2 ? "medium" : "low";
+}
+
+/** Map ESLint rule to confidence */
+function mapEslintConfidence(ruleId: string | null): Finding["confidence"] {
+  // TypeScript-aware rules have high confidence
+  if (ruleId?.startsWith("@typescript-eslint/")) {
+    return "high";
+  }
+  return "medium";
+}
+
+/**
+ * Parse ESLint JSON output into Findings.
+ */
+export function parseEslintOutput(output: EslintOutput): Finding[] {
+  const findings: Finding[] = [];
+
+  for (const fileResult of output) {
+    const normalizedPath = normalizePath(fileResult.filePath);
+
+    for (const msg of fileResult.messages) {
+      // Skip messages without a ruleId (parse errors handled separately)
+      if (!msg.ruleId) continue;
+
+      const location: Location = {
+        path: normalizedPath,
+        startLine: msg.line,
+        startColumn: msg.column,
+        endLine: msg.endLine,
+        endColumn: msg.endColumn,
+      };
+
+      const severity = mapEslintSeverity(msg.severity, msg.ruleId);
+      const confidence = mapEslintConfidence(msg.ruleId);
+      const hasAutofix = !!msg.fix;
+
+      const finding: Omit<Finding, "fingerprint"> = {
+        layer: "code",
+        tool: "eslint",
+        ruleId: msg.ruleId,
+        title: `ESLint: ${msg.ruleId}`,
+        message: msg.message,
+        severity,
+        confidence,
+        autofix: hasAutofix ? "safe" : "none",
+        locations: [location],
+        labels: [
+          "vibeCheck",
+          "tool:eslint",
+          `severity:${severity}`,
+        ],
+        rawOutput: msg,
+      };
+
+      findings.push({
+        ...finding,
+        fingerprint: fingerprintFinding(finding),
+      });
+    }
+  }
+
+  return findings;
+}
+
+// ============================================================================
 // Trunk Parser (Meta-Linter)
 // ============================================================================
 

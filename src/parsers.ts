@@ -15,9 +15,11 @@ export {
   parseDepcruiseOutput,
   parseKnipOutput,
   parseTrunkOutput,
+  parseEslintOutput,
   type DepcruiseOutput,
   type KnipOutput,
   type TrunkOutput,
+  type EslintOutput,
 } from "./parsers/typescript.js";
 
 // Python parsers
