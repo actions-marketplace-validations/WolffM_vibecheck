@@ -6,7 +6,7 @@ vibeCheck is a **GitHub Action** that runs static analysis on any repository and
 
 | Example Issues |
 |:---:|
-| [![All](https://img.shields.io/badge/All-vibeCheck-7c3aed)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck) [![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck+label%3Alang%3Atypescript) [![Python](https://img.shields.io/badge/Python-3776ab?logo=python&logoColor=white)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck+label%3Alang%3Apython) [![Java](https://img.shields.io/badge/Java-b07219?logo=openjdk&logoColor=white)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck+label%3Alang%3Ajava) |
+| [![All](https://img.shields.io/badge/All-vibeCheck-7c3aed)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck) [![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck+label%3Alang%3Atypescript) [![Python](https://img.shields.io/badge/Python-3776ab?logo=python&logoColor=white)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck+label%3Alang%3Apython) [![Java](https://img.shields.io/badge/Java-b07219?logo=openjdk&logoColor=white)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck+label%3Alang%3Ajava) [![Rust](https://img.shields.io/badge/Rust-dea584?logo=rust&logoColor=black)](https://github.com/WolffM/vibecheck/issues?q=is%3Aissue+is%3Aopen+label%3AvibeCheck+label%3Alang%3Arust) |
 
 ## Quick Start
 
@@ -193,6 +193,14 @@ This allows vibeCheck to track issues across minor code changes.
 | -------- | ---------------------- |
 | PMD      | Code analysis          |
 | SpotBugs | Bytecode bug detection |
+
+### Rust
+
+| Tool        | Purpose                      |
+| ----------- | ---------------------------- |
+| Clippy      | Linting (750+ lints)         |
+| cargo-audit | Dependency vulnerabilities   |
+| cargo-deny  | Licenses, bans, advisories   |
 
 ## Severity & Confidence
 

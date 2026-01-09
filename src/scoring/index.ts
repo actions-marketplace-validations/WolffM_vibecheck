@@ -42,6 +42,13 @@ export {
   mapSpotBugsSeverity,
   mapTscConfidence,
   mapTscSeverity,
+  // Rust mappers
+  mapClippyConfidence,
+  mapClippySeverity,
+  mapCargoAuditConfidence,
+  mapCargoAuditSeverity,
+  mapCargoDenyConfidence,
+  mapCargoDenySeverity,
 } from "./tool-mappers.js";
 
 // Classification

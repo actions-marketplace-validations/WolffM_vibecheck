@@ -1,0 +1,28 @@
+[package]
+name = "test-fixtures-rust"
+version = "0.1.0"
+edition = "2021"
+
+# This is a test fixture package for vibeCheck Rust support
+# It intentionally includes problematic code and dependencies for testing
+
+[[bin]]
+name = "rust-issues"
+path = "rust-issues.rs"
+
+[dependencies]
+# Note: In a real test, you would add a dependency with known vulnerabilities
+# For example, an old version of a crate with CVEs
+# However, we don't want to actually pull in vulnerable code
+# The cargo-audit tool will check Cargo.lock for advisories
+
+[lints.clippy]
+# Enable strict Clippy lints for testing
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+cognitive_complexity = "warn"
+too_many_arguments = "warn"
+missing_safety_doc = "warn"

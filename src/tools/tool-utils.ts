@@ -175,6 +175,9 @@ export const EXCLUDE_DIRS_PYTHON = [
   ".venv",
 ].join(",");
 
+/** Pre-built exclude string for Rust tools (includes target, .cargo) */
+export const EXCLUDE_DIRS_RUST = ["target", ".cargo"].join(",");
+
 /**
  * Check if a path should be excluded from analysis.
  * Returns true if the path is inside any of the common exclude directories.

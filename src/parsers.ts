@@ -40,3 +40,12 @@ export {
 
 // Security parsers (cross-language)
 export { parseSemgrepOutput, type SemgrepOutput } from "./parsers/security.js";
+
+// Rust parsers
+export {
+  parseClippyOutput,
+  parseCargoAuditOutput,
+  parseCargoDenyOutput,
+  type CargoAuditOutput,
+  type CargoDenyOutput,
+} from "./parsers/rust.js";
