@@ -498,3 +498,200 @@ export function mapSpotBugsConfidence(confidence: number): Confidence {
   }
   return "low";
 }
+
+// ============================================================================
+// Clippy Mappings (Rust)
+// ============================================================================
+
+/** High severity Clippy lint categories */
+const CLIPPY_HIGH_SEVERITY_LINTS = [
+  "clippy::correctness",
+  "clippy::suspicious",
+  "clippy::unwrap_used",
+  "clippy::expect_used",
+  "clippy::panic",
+  "clippy::todo",
+  "clippy::unimplemented",
+  "clippy::unreachable",
+  "clippy::indexing_slicing",
+  "clippy::integer_division",
+  "clippy::mem_forget",
+  "clippy::multiple_unsafe_ops_per_block",
+  "clippy::undocumented_unsafe_blocks",
+];
+
+/** Medium severity Clippy lint categories */
+const CLIPPY_MEDIUM_SEVERITY_LINTS = [
+  "clippy::perf",
+  "clippy::complexity",
+  "clippy::nursery",
+  "clippy::cognitive_complexity",
+  "clippy::too_many_arguments",
+  "clippy::too_many_lines",
+];
+
+/**
+ * Map Clippy diagnostic level to severity.
+ * Clippy uses error, warning, note, help levels.
+ */
+export function mapClippySeverity(level: string, lintName?: string): Severity {
+  // Check if lint name indicates high severity
+  if (lintName) {
+    const normalizedLint = lintName.toLowerCase();
+    if (CLIPPY_HIGH_SEVERITY_LINTS.some((l) => normalizedLint.includes(l))) {
+      return "high";
+    }
+    if (CLIPPY_MEDIUM_SEVERITY_LINTS.some((l) => normalizedLint.includes(l))) {
+      return "medium";
+    }
+  }
+
+  const normalizedLevel = level.toLowerCase();
+  if (normalizedLevel === "error" || normalizedLevel === "ice") {
+    return "critical";
+  }
+  if (normalizedLevel === "warning") {
+    return "medium";
+  }
+  if (normalizedLevel === "note" || normalizedLevel === "help") {
+    return "low";
+  }
+  return "medium";
+}
+
+/**
+ * Map Clippy findings to confidence.
+ * Clippy lints are generally high confidence as they're statically determined.
+ */
+export function mapClippyConfidence(lintName?: string): Confidence {
+  if (!lintName) {
+    return "medium";
+  }
+  const normalizedLint = lintName.toLowerCase();
+
+  // Correctness and suspicious lints are definitive
+  if (
+    normalizedLint.includes("correctness") ||
+    normalizedLint.includes("suspicious")
+  ) {
+    return "high";
+  }
+  // Pedantic and style lints may be subjective
+  if (
+    normalizedLint.includes("pedantic") ||
+    normalizedLint.includes("style")
+  ) {
+    return "medium";
+  }
+  // Restriction lints are intentionally strict
+  if (normalizedLint.includes("restriction")) {
+    return "high";
+  }
+  return "high"; // Default high for Rust's strict type system
+}
+
+// ============================================================================
+// cargo-audit Mappings (Rust)
+// ============================================================================
+
+/**
+ * Map cargo-audit CVSS severity to our scale.
+ * Uses CVSS score ranges: critical (9.0-10.0), high (7.0-8.9), medium (4.0-6.9), low (0.1-3.9)
+ */
+export function mapCargoAuditSeverity(severity: string, cvss?: number): Severity {
+  // If CVSS score is provided, use it
+  if (cvss !== undefined) {
+    if (cvss >= 9.0) return "critical";
+    if (cvss >= 7.0) return "high";
+    if (cvss >= 4.0) return "medium";
+    return "low";
+  }
+
+  // Fall back to string severity
+  const normalized = severity.toLowerCase();
+  if (normalized === "critical") return "critical";
+  if (normalized === "high") return "high";
+  if (normalized === "medium" || normalized === "moderate") return "medium";
+  if (normalized === "low") return "low";
+  return "medium";
+}
+
+/**
+ * Map cargo-audit findings to confidence.
+ * Advisory database findings are high confidence.
+ */
+export function mapCargoAuditConfidence(): Confidence {
+  // RustSec advisories are vetted and high confidence
+  return "high";
+}
+
+// ============================================================================
+// cargo-deny Mappings (Rust)
+// ============================================================================
+
+/**
+ * Map cargo-deny diagnostic severity to our scale.
+ * cargo-deny categorizes issues into: advisories, bans, licenses, sources
+ */
+export function mapCargoDenySeverity(
+  category: string,
+  severity?: string,
+): Severity {
+  const normalizedCategory = category.toLowerCase();
+  const normalizedSeverity = severity?.toLowerCase();
+
+  // Advisory findings use the advisory severity
+  if (normalizedCategory === "advisories" || normalizedCategory === "advisory") {
+    if (normalizedSeverity === "critical") return "critical";
+    if (normalizedSeverity === "high") return "high";
+    if (normalizedSeverity === "medium" || normalizedSeverity === "moderate") return "medium";
+    if (normalizedSeverity === "low") return "low";
+    return "high"; // Default for advisories
+  }
+
+  // License violations are high severity
+  if (normalizedCategory === "licenses" || normalizedCategory === "license") {
+    return "high";
+  }
+
+  // Banned crates are high severity
+  if (normalizedCategory === "bans" || normalizedCategory === "ban") {
+    return "high";
+  }
+
+  // Source restrictions are medium
+  if (normalizedCategory === "sources" || normalizedCategory === "source") {
+    return "medium";
+  }
+
+  return "medium";
+}
+
+/**
+ * Map cargo-deny findings to confidence.
+ */
+export function mapCargoDenyConfidence(category: string): Confidence {
+  const normalizedCategory = category.toLowerCase();
+
+  // Advisory findings are from the RustSec database
+  if (normalizedCategory === "advisories" || normalizedCategory === "advisory") {
+    return "high";
+  }
+
+  // License detection is generally accurate
+  if (normalizedCategory === "licenses" || normalizedCategory === "license") {
+    return "high";
+  }
+
+  // Bans are explicit config, always correct
+  if (normalizedCategory === "bans" || normalizedCategory === "ban") {
+    return "high";
+  }
+
+  // Source checks are definitive
+  if (normalizedCategory === "sources" || normalizedCategory === "source") {
+    return "high";
+  }
+
+  return "medium";
+}

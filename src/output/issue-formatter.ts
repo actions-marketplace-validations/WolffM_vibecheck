@@ -8,6 +8,7 @@ import {
   generateFingerprintMarker,
   generateRunMetadataMarker,
   shortFingerprint,
+  isTestFixtureFinding,
 } from "../utils/fingerprints.js";
 import { getSuggestedFix } from "../utils/fix-templates.js";
 import { getRuleDocUrl } from "../utils/rule-docs.js";
@@ -166,7 +167,7 @@ function getDominantLanguageFromLocations(
 
 /**
  * Detect which languages have findings in a set of findings.
- * Returns a set of language names (typescript, python, java).
+ * Returns a set of language names (typescript, python, java, rust).
  */
 export function detectLanguagesInFindings(findings: Finding[]): Set<string> {
   const languages = new Set<string>();
@@ -213,6 +214,11 @@ export function getLabelsForFinding(
     if (lang) {
       labels.push(`lang:${lang}`);
     }
+  }
+
+  // Add demo label for test-fixtures findings
+  if (isTestFixtureFinding(finding)) {
+    labels.push("demo");
   }
 
   return labels;

@@ -29,6 +29,9 @@ import {
   runBandit,
   runPmd,
   runSpotBugs,
+  runClippy,
+  runCargoAudit,
+  runCargoDeny,
 } from "./tool-runners.js";
 
 // ============================================================================
@@ -178,6 +181,32 @@ const TOOL_REGISTRY: ToolDefinition[] = [
     detector: (p) => p.languages.includes("java"),
     run: (rootPath, config) => runSpotBugs(rootPath, config),
     configKey: "spotbugs",
+  },
+
+  // Rust tools
+  {
+    name: "clippy",
+    displayName: "Clippy (Rust Linter)",
+    defaultCadence: "daily",
+    detector: (p) => p.languages.includes("rust"),
+    run: (rootPath, config) => runClippy(rootPath, config),
+    configKey: "clippy",
+  },
+  {
+    name: "cargo-audit",
+    displayName: "cargo-audit (Rust Security)",
+    defaultCadence: "weekly",
+    detector: (p) => p.languages.includes("rust"),
+    run: (rootPath) => runCargoAudit(rootPath),
+    configKey: "cargo_audit",
+  },
+  {
+    name: "cargo-deny",
+    displayName: "cargo-deny (Rust Dependencies)",
+    defaultCadence: "weekly",
+    detector: (p) => p.languages.includes("rust"),
+    run: (rootPath, config) => runCargoDeny(rootPath, config),
+    configKey: "cargo_deny",
   },
 ];
 

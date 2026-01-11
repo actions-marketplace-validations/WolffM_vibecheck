@@ -197,6 +197,48 @@ runs:
           fi
         fi
 
+    - name: Detect Rust files
+      id: detect-rust
+      shell: bash
+      run: |
+        # Check for Rust project files (Cargo.toml) OR .rs files
+        if [ -f "${{ github.workspace }}/Cargo.toml" ]; then
+          echo "has_rust=true" >> $GITHUB_OUTPUT
+          echo "Rust project detected (Cargo.toml found)"
+        elif [ -n "$(find "${{ github.workspace }}" -name "*.rs" -type f -not -path "*/target/*" -not -path "*/.cargo/*" 2>/dev/null | head -1)" ]; then
+          echo "has_rust=true" >> $GITHUB_OUTPUT
+          echo "Rust source files detected"
+        else
+          echo "has_rust=false" >> $GITHUB_OUTPUT
+          echo "No Rust files detected"
+        fi
+
+    - name: Setup Rust (if needed)
+      if: steps.detect-rust.outputs.has_rust == 'true'
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: clippy
+
+    - name: Install Rust Analysis Tools
+      if: steps.detect-rust.outputs.has_rust == 'true'
+      shell: bash
+      run: |
+        echo "Installing Rust analysis tools (cargo-audit, cargo-deny)..."
+        cargo install cargo-audit cargo-deny --locked
+
+    - name: Generate Cargo.lock files (for cargo-audit/deny)
+      if: steps.detect-rust.outputs.has_rust == 'true'
+      shell: bash
+      run: |
+        # Find all directories with Cargo.toml and generate Cargo.lock if missing
+        find "${{ github.workspace }}" -name "Cargo.toml" -not -path "*/target/*" | while read cargo_toml; do
+          dir=$(dirname "$cargo_toml")
+          if [ ! -f "$dir/Cargo.lock" ]; then
+            echo "Generating Cargo.lock in $dir..."
+            (cd "$dir" && cargo generate-lockfile 2>/dev/null) || echo "  Failed to generate lockfile (non-fatal)"
+          fi
+        done
+
     - name: Run Analysis
       id: analyze
       shell: bash

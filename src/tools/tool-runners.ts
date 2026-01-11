@@ -24,6 +24,7 @@ export {
 export { runRuff, runMypy, runBandit } from "./runners/python.js";
 export { runPmd, runSpotBugs } from "./runners/java.js";
 export { runSemgrep } from "./runners/security.js";
+export { runClippy, runCargoAudit, runCargoDeny } from "./runners/rust.js";
 
 // ============================================================================
 // Trunk Runner (kept here due to complexity and special handling)

@@ -116,8 +116,20 @@ async function detectLanguages(rootPath: string): Promise<Language[]> {
     languages.push("go");
   }
 
-  // Rust detection
-  if (existsSync(join(rootPath, "Cargo.toml"))) {
+  // Rust detection - check for project files or .rs files in key directories
+  const hasRustProject = existsSync(join(rootPath, "Cargo.toml"));
+
+  // Also check for .rs files in common directories (including test-fixtures for demo)
+  const hasRustFiles = hasFilesWithExtension(rootPath, ".rs", [
+    "src",
+    "lib",
+    "bin",
+    "examples",
+    "test-fixtures",
+    ".",
+  ]);
+
+  if (hasRustProject || hasRustFiles) {
     languages.push("rust");
   }
 
@@ -272,6 +284,9 @@ function detectToolConfigs(rootPath: string): {
   // Java tools
   hasPmd: boolean;
   hasSpotBugs: boolean;
+  // Rust tools
+  hasClippy: boolean;
+  hasCargoDeny: boolean;
 } {
   // ESLint configs (multiple possible names)
   const eslintConfigs = [
@@ -396,6 +411,29 @@ function detectToolConfigs(rootPath: string): {
     existsSync(join(rootPath, config)),
   );
 
+  // Clippy (Rust linter)
+  const clippyConfigs = ["clippy.toml", ".clippy.toml"];
+  // Also check Cargo.toml for [lints.clippy] section
+  let hasClippyInCargo = false;
+  const cargoTomlPath = join(rootPath, "Cargo.toml");
+  if (existsSync(cargoTomlPath)) {
+    try {
+      const content = readFileSync(cargoTomlPath, "utf-8");
+      hasClippyInCargo = content.includes("[lints.clippy]") || content.includes("[workspace.lints.clippy]");
+    } catch {
+      // ignore
+    }
+  }
+  const hasClippy =
+    clippyConfigs.some((config) => existsSync(join(rootPath, config))) ||
+    hasClippyInCargo;
+
+  // cargo-deny (Rust dependency linter)
+  const cargoDenyConfigs = ["deny.toml", ".deny.toml"];
+  const hasCargoDeny = cargoDenyConfigs.some((config) =>
+    existsSync(join(rootPath, config)),
+  );
+
   return {
     hasEslint,
     hasPrettier,
@@ -406,6 +444,8 @@ function detectToolConfigs(rootPath: string): {
     hasMypy,
     hasPmd,
     hasSpotBugs,
+    hasClippy,
+    hasCargoDeny,
   };
 }
 
@@ -441,6 +481,10 @@ export async function detectRepo(
     hasMypy: toolConfigs.hasMypy,
     hasPmd: toolConfigs.hasPmd,
     hasSpotBugs: toolConfigs.hasSpotBugs,
+    // Rust detection
+    hasRust: languages.includes("rust"),
+    hasClippy: toolConfigs.hasClippy,
+    hasCargoDeny: toolConfigs.hasCargoDeny,
   };
 }
 

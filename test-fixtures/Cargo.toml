@@ -1,0 +1,23 @@
+[package]
+name = "test-fixtures-rust"
+version = "0.1.0"
+edition = "2021"
+
+# This is a test fixture package for vibeCheck Rust support
+# It intentionally includes problematic code and dependencies for testing
+
+[[bin]]
+name = "rust-issues"
+path = "rust-issues.rs"
+
+[dependencies]
+# Intentionally vulnerable/problematic dependencies for testing
+
+# RUSTSEC-2021-0139: ansi_term unmaintained (also banned in deny.toml)
+ansi_term = "0.12.1"
+
+# RUSTSEC-2020-0159: time 0.1 is unsound (also banned in deny.toml for <0.3)
+time = "0.1.44"
+
+# RUSTSEC-2020-0071: chrono has localtime_r issues
+chrono = "0.4.19"

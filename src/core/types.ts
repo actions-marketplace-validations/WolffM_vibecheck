@@ -92,6 +92,22 @@ interface SpotBugsConfig extends ToolConfig {
   threshold?: "low" | "medium" | "high";
 }
 
+// Rust tool configs
+interface ClippyConfig extends ToolConfig {
+  config_path?: string;
+  all_features?: boolean; // Enable all features
+  all_targets?: boolean; // Check all targets
+}
+
+interface CargoAuditConfig extends ToolConfig {
+  // No additional config options needed
+}
+
+interface CargoDenyConfig extends ToolConfig {
+  config_path?: string;
+  checks?: ("advisories" | "bans" | "licenses" | "sources")[]; // Which checks to run
+}
+
 export interface ToolsConfig {
   tsc?: TscConfig;
   eslint?: EslintConfig;
@@ -107,6 +123,10 @@ export interface ToolsConfig {
   // Java tools
   pmd?: PmdConfig;
   spotbugs?: SpotBugsConfig;
+  // Rust tools
+  clippy?: ClippyConfig;
+  cargo_audit?: CargoAuditConfig;
+  cargo_deny?: CargoDenyConfig;
 }
 
 export interface TrunkConfig {
@@ -205,6 +225,10 @@ export interface RepoProfile {
   hasMypy: boolean;
   hasPmd: boolean;
   hasSpotBugs: boolean;
+  // Rust detection
+  hasRust: boolean;
+  hasClippy: boolean;
+  hasCargoDeny: boolean;
 }
 
 // ============================================================================
@@ -246,6 +270,10 @@ export type KnownToolName =
   // Java
   | "pmd"
   | "spotbugs"
+  // Rust
+  | "clippy"
+  | "cargo-audit"
+  | "cargo-deny"
   // Security
   | "semgrep"
   // Trunk meta-linter (and common sub-linters)

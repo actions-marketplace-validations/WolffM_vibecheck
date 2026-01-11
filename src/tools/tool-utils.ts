@@ -175,6 +175,9 @@ export const EXCLUDE_DIRS_PYTHON = [
   ".venv",
 ].join(",");
 
+/** Pre-built exclude string for Rust tools (includes target, .cargo) */
+export const EXCLUDE_DIRS_RUST = ["target", ".cargo"].join(",");
+
 /**
  * Check if a path should be excluded from analysis.
  * Returns true if the path is inside any of the common exclude directories.
@@ -207,6 +210,41 @@ export function findSourceDirs(
   const dirs = candidates || defaultCandidates;
 
   return dirs.filter((dir) => existsSync(join(rootPath, dir)));
+}
+
+/**
+ * Find directories containing Cargo.toml files (for Rust projects).
+ * Returns an array of directory paths that contain Cargo.toml.
+ */
+export function findCargoDirectories(rootPath: string): string[] {
+  const cargoDirs: string[] = [];
+
+  // Check root first
+  if (existsSync(join(rootPath, "Cargo.toml"))) {
+    cargoDirs.push(rootPath);
+  }
+
+  // Check common subdirectories that might contain Rust code
+  const candidates = [
+    "test-fixtures",
+    "rust",
+    "crates",
+    "src",
+    "lib",
+    "examples",
+  ];
+
+  for (const candidate of candidates) {
+    const candidatePath = join(rootPath, candidate);
+    if (
+      existsSync(candidatePath) &&
+      existsSync(join(candidatePath, "Cargo.toml"))
+    ) {
+      cargoDirs.push(candidatePath);
+    }
+  }
+
+  return cargoDirs;
 }
 
 // ============================================================================
