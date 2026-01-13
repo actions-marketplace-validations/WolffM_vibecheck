@@ -40,8 +40,8 @@ jobs:
       - uses: WolffM/vibecheck@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          severity_threshold: "low"
-          confidence_threshold: "medium"
+          # severity_threshold: "medium"  # default, adjust as needed
+          # confidence_threshold: "low"   # default
 ```
 
 ---
@@ -75,8 +75,8 @@ Customize the action in your workflow file:
 | Input                  | Description                       | Default     |
 | ---------------------- | --------------------------------- | ----------- |
 | `github_token`         | GitHub token for issue management | *Required*  |
-| `severity_threshold`   | Min severity for issues           | `low`       |
-| `confidence_threshold` | Min confidence for issues         | `medium`    |
+| `severity_threshold`   | Min severity for issues           | `medium`    |
+| `confidence_threshold` | Min confidence for issues         | `low`       |
 | `merge_strategy`       | How to group findings into issues | `same-rule` |
 | `skip_issues`          | Skip issue creation (dry run)     | `false`     |
 | `create_config_pr`     | Create PR with generated configs  | `false`     |
@@ -212,6 +212,7 @@ This allows vibeCheck to track issues across minor code changes.
 | `high`     | Type errors, circular dependencies, forbidden imports |
 | `medium`   | Code smells, unused code, complexity                  |
 | `low`      | Style issues, minor suggestions                       |
+| `info`     | Informational, purely stylistic preferences           |
 
 ### Confidence Levels
 
@@ -223,7 +224,7 @@ This allows vibeCheck to track issues across minor code changes.
 
 ### Default Thresholds
 
-The install page defaults to `severity >= low` and `confidence >= medium` to reduce noise. Adjust as needed.
+The default is `severity >= medium` and `confidence >= low` to balance signal-to-noise. Use `low` or `info` severity to see more findings, or `high` to reduce noise.
 
 ## Issue Format
 

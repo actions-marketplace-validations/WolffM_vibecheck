@@ -11,7 +11,7 @@
 
 export type Cadence = "daily" | "weekly" | "monthly";
 type ToolEnablement = "auto" | boolean | Cadence;
-export type Severity = "low" | "medium" | "high" | "critical";
+export type Severity = "info" | "low" | "medium" | "high" | "critical";
 export type Confidence = "low" | "medium" | "high";
 export type AutofixLevel = "none" | "safe" | "requires_review";
 export type Layer = "code" | "architecture" | "system" | "security";
@@ -331,6 +331,11 @@ export interface LlmJsonSummary {
   actionable: number;
   bySeverity: Record<Severity, number>;
   byTool: Record<string, number>;
+  // Suppressed findings (below severity/confidence threshold)
+  suppressed?: {
+    bySeverity: Record<Severity, number>;
+    total: number;
+  };
   // Issue stats (populated after issue processing)
   issuesCreated?: number;
   issuesUpdated?: number;

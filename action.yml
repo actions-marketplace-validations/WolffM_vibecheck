@@ -14,7 +14,7 @@ inputs:
   severity_threshold:
     description: "Minimum severity for issues: critical, high, medium, low, info"
     required: false
-    default: "info"
+    default: "medium"
   confidence_threshold:
     description: "Minimum confidence for issues: high, medium, low"
     required: false
@@ -311,18 +311,40 @@ runs:
         if [ -f "$OUTPUT_DIR/results.llm.json" ]; then
           echo "## 🛡️ vibeCheck Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           TOTAL=$(jq '.summary.totalFindings // 0' $OUTPUT_DIR/results.llm.json)
           CREATED=$(jq '.summary.issuesCreated // 0' $OUTPUT_DIR/results.llm.json)
           UPDATED=$(jq '.summary.issuesUpdated // 0' $OUTPUT_DIR/results.llm.json)
           CLOSED=$(jq '.summary.issuesClosed // 0' $OUTPUT_DIR/results.llm.json)
-          
+
           echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Total Findings | $TOTAL |" >> $GITHUB_STEP_SUMMARY
           echo "| Issues Created | $CREATED |" >> $GITHUB_STEP_SUMMARY
           echo "| Issues Updated | $UPDATED |" >> $GITHUB_STEP_SUMMARY
           echo "| Issues Closed | $CLOSED |" >> $GITHUB_STEP_SUMMARY
+
+          # Show suppressed findings if any exist (below severity/confidence threshold)
+          SUPPRESSED_TOTAL=$(jq '.summary.suppressed.total // 0' $OUTPUT_DIR/results.llm.json)
+          if [ "$SUPPRESSED_TOTAL" -gt 0 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>ℹ️ <strong>$SUPPRESSED_TOTAL findings suppressed</strong> (below threshold)</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Severity | Suppressed |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|------------|" >> $GITHUB_STEP_SUMMARY
+
+            for sev in info low medium high critical; do
+              COUNT=$(jq ".summary.suppressed.bySeverity.$sev // 0" $OUTPUT_DIR/results.llm.json)
+              if [ "$COUNT" -gt 0 ]; then
+                echo "| $sev | $COUNT |" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Adjust \`severity_threshold\` or \`confidence_threshold\` to see these findings." >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
         fi
 
     - name: Create Config PR
