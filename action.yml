@@ -479,8 +479,8 @@ runs:
             return 0
           fi
 
-          # Commit and push
-          git add -A
+          # Commit and push - only add the fixed files, not all untracked files
+          git add $FILES
           git commit -m "fix: auto-fix $TOOL issues"
           git push origin "$BRANCH_NAME" --force
 
