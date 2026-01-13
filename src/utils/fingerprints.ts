@@ -549,6 +549,16 @@ function mergeFindings(
     title = base.title;
   }
 
+  // Compute best autofix level from all findings
+  // Priority: "safe" > "requires_review" > "none"
+  const autofixPriority = { safe: 2, requires_review: 1, none: 0 };
+  let bestAutofix = base.autofix;
+  for (const f of findings) {
+    if (autofixPriority[f.autofix] > autofixPriority[bestAutofix]) {
+      bestAutofix = f.autofix;
+    }
+  }
+
   // Create merged finding
   const merged: Omit<Finding, "fingerprint"> = {
     ...base,
@@ -556,6 +566,7 @@ function mergeFindings(
     evidence: combinedEvidence,
     message,
     title,
+    autofix: bestAutofix,
     // For same-linter and same-file-tool merges, update ruleId to reflect multiple rules
     ruleId:
       (strategy === "same-linter" || strategy === "same-file-tool") && uniqueRules.length > 1

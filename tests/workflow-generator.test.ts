@@ -204,6 +204,41 @@ describe('generateWorkflow', () => {
       expect(yaml).toContain('#   knip: { enabled: false }');
     });
   });
+
+  describe('autofix PRs option', () => {
+    it('should not include autofix_prs by default', () => {
+      const options = createTestOptions();
+      const yaml = generateWorkflow(options);
+
+      expect(yaml).not.toContain('autofix_prs');
+      expect(yaml).toContain('contents: read');
+      expect(yaml).not.toContain('contents: write');
+      expect(yaml).not.toContain('pull-requests: write');
+    });
+
+    it('should include autofix_prs when enabled', () => {
+      const options = createTestOptions({ autofixPrs: true });
+      const yaml = generateWorkflow(options);
+
+      expect(yaml).toContain('autofix_prs: true');
+    });
+
+    it('should add write permissions when autofix_prs is enabled', () => {
+      const options = createTestOptions({ autofixPrs: true });
+      const yaml = generateWorkflow(options);
+
+      expect(yaml).toContain('contents: write');
+      expect(yaml).toContain('pull-requests: write');
+      expect(yaml).not.toContain('contents: read');
+    });
+
+    it('should include comments about required permissions', () => {
+      const options = createTestOptions({ autofixPrs: true });
+      const yaml = generateWorkflow(options);
+
+      expect(yaml).toContain('# Required for autofix PRs');
+    });
+  });
 });
 
 describe('DEFAULTS', () => {

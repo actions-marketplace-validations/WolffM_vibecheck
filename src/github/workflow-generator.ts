@@ -10,6 +10,7 @@ export interface WorkflowOptions {
   severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
   confidence: 'low' | 'medium' | 'high';
   disabledTools: string[];
+  autofixPrs?: boolean;
 }
 
 export const DEFAULTS: WorkflowOptions = {
@@ -17,6 +18,7 @@ export const DEFAULTS: WorkflowOptions = {
   severity: 'low',
   confidence: 'medium',
   disabledTools: [],
+  autofixPrs: false,
 };
 
 export const DEFAULT_TOOLS = [
@@ -55,7 +57,7 @@ export function getCronForCadence(cadence: WorkflowOptions['cadence']): string |
  * Generate workflow YAML based on options
  */
 export function generateWorkflow(options: WorkflowOptions): string {
-  const { cadence, severity, confidence, disabledTools } = options;
+  const { cadence, severity, confidence, disabledTools, autofixPrs } = options;
   const cron = getCronForCadence(cadence);
 
   // Build the on: section based on cadence
@@ -75,6 +77,21 @@ export function generateWorkflow(options: WorkflowOptions): string {
   workflow_dispatch:`;
   }
 
+  // Build permissions section - add write permissions if autofix is enabled
+  let permissionsSection: string;
+  if (autofixPrs) {
+    permissionsSection = `permissions:
+  contents: write      # Required for autofix PRs
+  issues: write
+  pull-requests: write # Required for autofix PRs
+  security-events: write`;
+  } else {
+    permissionsSection = `permissions:
+  contents: read
+  issues: write
+  security-events: write`;
+  }
+
   // Build the workflow
   let yaml = `# vibeCheck Workflow
 #
@@ -85,10 +102,7 @@ name: vibeCheck
 
 ${onSection}
 
-permissions:
-  contents: read
-  issues: write
-  security-events: write
+${permissionsSection}
 
 jobs:
   analyze:
@@ -112,6 +126,11 @@ jobs:
   }
   if (confidence !== 'low') {
     yaml += `\n          confidence_threshold: "${confidence}"`;
+  }
+
+  // Add autofix_prs if enabled
+  if (autofixPrs) {
+    yaml += `\n          autofix_prs: true`;
   }
 
   // If tools are disabled, add comments about it

@@ -43,6 +43,7 @@ jobs:
           severity_threshold: low
           confidence_threshold: medium
           skip_issues: false
+          # autofix_prs: true  # Uncomment to create PRs for safe autofixes (requires contents:write, pull-requests:write)
 
       - name: Upload artifacts
         if: always()
