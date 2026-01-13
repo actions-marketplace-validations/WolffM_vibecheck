@@ -22,10 +22,11 @@ export type MergeStrategy =
   | "same-file"
   | "same-rule"
   | "same-tool"
-  | "same-linter";
+  | "same-linter"
+  | "same-file-tool";
 
 /** Default merge strategy - single source of truth for all configs */
-export const DEFAULT_MERGE_STRATEGY: MergeStrategy = "same-rule";
+export const DEFAULT_MERGE_STRATEGY: MergeStrategy = "same-file-tool";
 
 interface ToolConfig {
   enabled: ToolEnablement;

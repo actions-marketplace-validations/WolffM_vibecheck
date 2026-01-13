@@ -2,17 +2,13 @@
  * Workflow Generator Module
  *
  * Generates GitHub Actions workflow YAML for vibeCheck installation.
- * Used by tests. The install page (docs/install.html) has its own copy
- * that should be kept in sync with DEFAULT_MERGE_STRATEGY in types.ts.
+ * Used by tests. The install page (docs/install.html) has its own copy.
  */
-
-import { DEFAULT_MERGE_STRATEGY, type MergeStrategy } from "../core/types.js";
 
 export interface WorkflowOptions {
   cadence: 'manual' | 'daily' | 'weekly' | 'monthly';
   severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
   confidence: 'low' | 'medium' | 'high';
-  mergeStrategy: MergeStrategy;
   disabledTools: string[];
 }
 
@@ -20,7 +16,6 @@ export const DEFAULTS: WorkflowOptions = {
   cadence: 'manual',
   severity: 'low',
   confidence: 'medium',
-  mergeStrategy: DEFAULT_MERGE_STRATEGY,
   disabledTools: [],
 };
 
@@ -60,7 +55,7 @@ export function getCronForCadence(cadence: WorkflowOptions['cadence']): string |
  * Generate workflow YAML based on options
  */
 export function generateWorkflow(options: WorkflowOptions): string {
-  const { cadence, severity, confidence, mergeStrategy, disabledTools } = options;
+  const { cadence, severity, confidence, disabledTools } = options;
   const cron = getCronForCadence(cadence);
 
   // Build the on: section based on cadence
@@ -117,9 +112,6 @@ jobs:
   }
   if (confidence !== 'low') {
     yaml += `\n          confidence_threshold: "${confidence}"`;
-  }
-  if (mergeStrategy !== 'same-rule') {
-    yaml += `\n          merge_strategy: "${mergeStrategy}"`;
   }
 
   // If tools are disabled, add comments about it

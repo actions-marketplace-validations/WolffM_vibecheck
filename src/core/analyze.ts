@@ -34,13 +34,12 @@ import type {
   Cadence,
   Confidence,
   Finding,
-  MergeStrategy,
   RepoProfile,
   RunContext,
   Severity,
   VibeCopConfig,
 } from "./types.js";
-import { DEFAULT_CONFIG, DEFAULT_MERGE_STRATEGY } from "./types.js";
+import { DEFAULT_CONFIG } from "./types.js";
 
 // ============================================================================
 // Exported Types
@@ -54,7 +53,6 @@ export interface AnalyzeOptions {
   skipIssues?: boolean;
   severityThreshold?: Severity | "info";
   confidenceThreshold?: Confidence;
-  mergeStrategy?: MergeStrategy;
 }
 
 export interface AnalyzeResult {
@@ -84,7 +82,6 @@ export async function analyze(
   const cadence = options.cadence || "weekly";
   const severityThreshold = options.severityThreshold || "info";
   const confidenceThreshold = options.confidenceThreshold || "low";
-  const mergeStrategy = options.mergeStrategy || DEFAULT_MERGE_STRATEGY;
   const outputDir = options.outputDir || join(rootPath, ".vibecheck-output");
 
   // Validate threshold values
@@ -134,9 +131,9 @@ export async function analyze(
     `  Total: ${allFindings.length} -> Unique: ${uniqueFindings.length}`,
   );
 
-  // Step 4b: Merge findings based on strategy
-  console.log(`Step 4b: Merging findings (strategy: ${mergeStrategy})...`);
-  const mergedFindings = mergeIssues(uniqueFindings, mergeStrategy);
+  // Step 4b: Merge findings (group by file + tool for better parallelism)
+  console.log("Step 4b: Merging findings (same-file-tool)...");
+  const mergedFindings = mergeIssues(uniqueFindings, "same-file-tool");
   console.log(
     `  Unique: ${uniqueFindings.length} -> Merged: ${mergedFindings.length}`,
   );
@@ -299,8 +296,6 @@ async function main() {
         console.error(`Error: ${(e as Error).message}`);
         process.exit(1);
       }
-    } else if ((arg === "--merge" || arg === "--merge-strategy") && args[i + 1]) {
-      options.mergeStrategy = args[++i] as MergeStrategy;
     } else if (arg === "--help" || arg === "-h") {
       console.log(`
 Usage: analyze [options]
@@ -313,7 +308,6 @@ Options:
   --skip-issues          Skip GitHub issue creation
   --severity <level>     Severity threshold: info, low, medium, high, critical
   --confidence <level>   Confidence threshold: low, medium, high
-  --merge-strategy <s>   Merge strategy: none, same-file, same-rule, same-linter, same-tool
   --help, -h             Show this help message
 `);
       process.exit(0);

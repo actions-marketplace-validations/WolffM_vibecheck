@@ -43,7 +43,6 @@ Options for 'analyze':
   --skip-issues              Skip GitHub issue creation
   --severity-threshold <s>   Min severity: critical, high, medium, low, info
   --confidence-threshold <c> Min confidence: high, medium, low
-  --merge-strategy <s>       How to merge findings: none, same-file, same-rule, same-linter, same-tool
 
 Environment Variables:
   GITHUB_TOKEN               Required for issue creation

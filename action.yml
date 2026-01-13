@@ -19,10 +19,6 @@ inputs:
     description: "Minimum confidence for issues: high, medium, low"
     required: false
     default: low
-  merge_strategy:
-    description: "How to merge findings: none, same-file, same-rule, same-linter, same-tool"
-    required: false
-    default: "same-rule"
   skip_issues:
     description: "Skip GitHub issue creation/updates"
     required: false
@@ -256,7 +252,6 @@ runs:
           --output "$OUTPUT_DIR" \
           --severity-threshold "${{ inputs.severity_threshold }}" \
           --confidence-threshold "${{ inputs.confidence_threshold }}" \
-          --merge-strategy "${{ inputs.merge_strategy }}" \
           ${{ inputs.skip_issues == 'true' && '--skip-issues' || '' }}
 
         # Set outputs

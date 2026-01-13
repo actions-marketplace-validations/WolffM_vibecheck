@@ -43,7 +43,6 @@ jobs:
           severity_threshold: low
           confidence_threshold: medium
           skip_issues: false
-          # merge_strategy defaults to same-rule (one issue per rule)
 
       - name: Upload artifacts
         if: always()

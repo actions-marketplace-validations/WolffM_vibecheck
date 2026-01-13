@@ -482,21 +482,6 @@
           </div>
         </div>
 
-        <!-- Issue Management -->
-        <div class="option-group">
-          <h4>Issue Management</h4>
-          <div class="option-row">
-            <div class="option-field">
-              <label for="mergeStrategy">Merge Strategy <span class="info-icon">i<span class="tooltip">How to group related findings into issues. "Same rule" creates one issue per rule across all files.</span></span></label>
-              <select id="mergeStrategy">
-                <option value="none">None - one issue per finding</option>
-                <option value="same-file">Same file + rule</option>
-                <option value="same-rule" selected>Same rule (default)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
         <!-- Tool Selection -->
         <div class="option-group">
           <h4>Tools</h4>
@@ -648,12 +633,11 @@
   </div>
 
   <script>
-    // Default values - keep mergeStrategy in sync with DEFAULT_MERGE_STRATEGY in src/core/types.ts
+    // Default values
     const DEFAULTS = {
       cadence: 'manual',
       severity: 'low',
-      confidence: 'medium',
-      mergeStrategy: 'same-rule'  // Source of truth: src/core/types.ts
+      confidence: 'medium'
     };
 
     // All tools that are enabled by default
@@ -671,7 +655,7 @@
 
     // Generate workflow YAML based on options
     function generateWorkflow(options) {
-      const { cadence, severity, confidence, mergeStrategy, disabledTools } = options;
+      const { cadence, severity, confidence, disabledTools } = options;
       const cron = getCronForCadence(cadence);
 
       // Check if using non-default values
@@ -679,7 +663,6 @@
         cadence !== DEFAULTS.cadence ||
         severity !== DEFAULTS.severity ||
         confidence !== DEFAULTS.confidence ||
-        mergeStrategy !== DEFAULTS.mergeStrategy ||
         disabledTools.length > 0;
 
       // Build the on: section based on cadence
@@ -737,9 +720,6 @@ jobs:
       if (confidence !== 'low') {
         yaml += `\n          confidence_threshold: "${confidence}"`;
       }
-      if (mergeStrategy !== 'same-rule') {
-        yaml += `\n          merge_strategy: "${mergeStrategy}"`;
-      }
 
       // If tools are disabled, we need a config file
       // For now, add a comment about it
@@ -761,7 +741,6 @@ jobs:
       const cadence = document.getElementById('cadence').value;
       const severity = document.getElementById('severity').value;
       const confidence = document.getElementById('confidence').value;
-      const mergeStrategy = document.getElementById('mergeStrategy').value;
 
       // Get disabled tools (unchecked checkboxes)
       const allTools = document.querySelectorAll('input[name="tool"]');
@@ -772,7 +751,7 @@ jobs:
         }
       });
 
-      return { cadence, severity, confidence, mergeStrategy, disabledTools };
+      return { cadence, severity, confidence, disabledTools };
     }
 
     const form = document.getElementById('installForm');
@@ -842,7 +821,6 @@ jobs:
         options.cadence !== DEFAULTS.cadence ||
         options.severity !== DEFAULTS.severity ||
         options.confidence !== DEFAULTS.confidence ||
-        options.mergeStrategy !== DEFAULTS.mergeStrategy ||
         options.disabledTools.length > 0;
 
       document.getElementById('customIndicator').classList.toggle('show', isCustom);

@@ -68,18 +68,16 @@ Customize the action in your workflow file:
     github_token: ${{ secrets.GITHUB_TOKEN }}
     severity_threshold: "medium"    # info | low | medium | high | critical
     confidence_threshold: "medium"  # low | medium | high
-    merge_strategy: "same-rule"     # none | same-file | same-rule
     skip_issues: "false"            # true for dry run
 ```
 
-| Input                  | Description                       | Default     |
-| ---------------------- | --------------------------------- | ----------- |
-| `github_token`         | GitHub token for issue management | *Required*  |
-| `severity_threshold`   | Min severity for issues           | `medium`    |
-| `confidence_threshold` | Min confidence for issues         | `low`       |
-| `merge_strategy`       | How to group findings into issues | `same-rule` |
-| `skip_issues`          | Skip issue creation (dry run)     | `false`     |
-| `create_config_pr`     | Create PR with generated configs  | `false`     |
+| Input                  | Description                       | Default    |
+| ---------------------- | --------------------------------- | ---------- |
+| `github_token`         | GitHub token for issue management | *Required* |
+| `severity_threshold`   | Min severity for issues           | `medium`   |
+| `confidence_threshold` | Min confidence for issues         | `low`      |
+| `skip_issues`          | Skip issue creation (dry run)     | `false`    |
+| `create_config_pr`     | Create PR with generated configs  | `false`    |
 
 ### Auto-commit Config Files (Optional)
 

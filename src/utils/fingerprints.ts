@@ -292,6 +292,10 @@ function buildMergeKey(finding: Finding, strategy: MergeStrategy): string {
       const sublinter = extractSublinter(finding);
       return `${tool}|${sublinter}`;
     }
+    case "same-file-tool":
+      // Group by file + tool (all findings from same tool in same file)
+      // This creates one issue per file per tool for better parallelism
+      return `${tool}|${file}`;
     default:
       return finding.fingerprint;
   }
@@ -507,9 +511,9 @@ function mergeFindings(
     baseMessage = base.message;
   }
 
-  // Add rule summary when multiple rules are merged (same-linter strategy)
+  // Add rule summary when multiple rules are merged (same-linter or same-file-tool strategy)
   let ruleSummary = "";
-  if (strategy === "same-linter" && uniqueRules.length > 1) {
+  if ((strategy === "same-linter" || strategy === "same-file-tool") && uniqueRules.length > 1) {
     // Get short names for each rule for cleaner display
     const shortRuleNames = uniqueRules.map((r) => {
       // Extract last meaningful part of rule ID
@@ -529,6 +533,10 @@ function mergeFindings(
     // For same-linter merge with multiple rules, use sublinter name
     const sublinter = extractSublinter(base);
     title = `${sublinter} (${allLocations.length} issues across ${uniqueRules.length} rules)`;
+  } else if (strategy === "same-file-tool" && uniqueRules.length > 1) {
+    // For same-file-tool merge with multiple rules, show tool + file + rule count
+    const fileName = uniqueFiles[0]?.split("/").pop() || uniqueFiles[0];
+    title = `${base.tool}: ${fileName} (${allLocations.length} issues across ${uniqueRules.length} rules)`;
   } else if (allLocations.length > 1) {
     // For jscpd, don't add occurrence count - the title already shows "X lines" of duplication
     // Adding "(Y occurrences)" is redundant and confusing
@@ -548,9 +556,9 @@ function mergeFindings(
     evidence: combinedEvidence,
     message,
     title,
-    // For same-linter merges, update ruleId to reflect multiple rules
+    // For same-linter and same-file-tool merges, update ruleId to reflect multiple rules
     ruleId:
-      strategy === "same-linter" && uniqueRules.length > 1
+      (strategy === "same-linter" || strategy === "same-file-tool") && uniqueRules.length > 1
         ? uniqueRules.join("+")
         : base.ruleId,
   };
