@@ -4,5 +4,6 @@
   "project": ["src/**/*.ts"],
   "ignore": ["tests/**/*.ts", "test-fixtures/**/*.ts"],
   "ignoreDependencies": ["jscpd"],
-  "eslint": false
+  "eslint": false,
+  "vitest": false
 }
