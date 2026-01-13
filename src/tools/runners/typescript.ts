@@ -283,10 +283,17 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
       const hasPnpm = existsSync(join(rootPath, "pnpm-lock.yaml"));
       if (hasPnpm) {
         console.log("  Running via pnpm exec");
+        // Set NODE_PATH to ensure knip can resolve modules from the target repo
+        const nodeModulesPath = join(rootPath, "node_modules");
+        const env = {
+          ...process.env,
+          NODE_PATH: nodeModulesPath,
+        };
         result = spawnSync("pnpm", ["exec", "knip", ...args], {
           cwd: rootPath,
           encoding: "utf-8",
           shell: true,
+          env,
         });
       } else {
         console.log("  Running via npx (local package)");
