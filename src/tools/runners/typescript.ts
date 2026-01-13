@@ -236,12 +236,8 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
   console.log("Running knip...");
 
   try {
-    const { available, useNpx } = isToolAvailable("knip");
-    if (!available) {
-      console.log("  knip not installed, skipping");
-      return [];
-    }
-
+    // Always use npx to ensure local knip is used with access to local node_modules
+    // Global knip can't resolve local dependencies (e.g., eslint config imports)
     const args = ["--reporter", "json"];
 
     // Check for config file (optional)
@@ -262,7 +258,7 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
       console.log("  Running with auto-detection (no config file)");
     }
 
-    const result = runTool("knip", args, { cwd: rootPath, useNpx });
+    const result = runTool("knip", args, { cwd: rootPath, useNpx: true });
 
     // knip outputs JSON to stdout, exits with code 1 if issues found
     const output = result.stdout || "";
