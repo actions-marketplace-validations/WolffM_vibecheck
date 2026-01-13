@@ -236,18 +236,24 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
   console.log("Running knip...");
 
   try {
-    // Prefer local knip from node_modules to ensure it has access to local dependencies
-    // Global knip can't resolve local dependencies (e.g., eslint config imports)
-    const localKnip = join(rootPath, "node_modules", ".bin", "knip");
-    const useLocalBinary = existsSync(localKnip);
+    // Check if this project has knip installed locally (check package.json)
+    const packageJsonPath = join(rootPath, "package.json");
+    let hasLocalKnip = false;
 
-    console.log(`  Checking for local knip at: ${localKnip} (exists: ${useLocalBinary})`);
-
-    if (useLocalBinary) {
-      console.log("  Using local knip from node_modules");
-    } else {
-      console.log("  Falling back to npx (local knip not found)");
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+        const allDeps = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
+        hasLocalKnip = "knip" in allDeps;
+      } catch {
+        // Ignore parse errors
+      }
     }
+
+    console.log(`  Local knip in package.json: ${hasLocalKnip}`);
 
     const args = ["--reporter", "json"];
 
@@ -269,10 +275,27 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
       console.log("  Running with auto-detection (no config file)");
     }
 
-    // Use local binary if available, otherwise fall back to npx
-    const result = useLocalBinary
-      ? spawnSync(localKnip, args, { cwd: rootPath, encoding: "utf-8", shell: true })
-      : runTool("knip", args, { cwd: rootPath, useNpx: true });
+    // Use pnpm exec if knip is a local dependency (handles pnpm's module resolution)
+    // Otherwise fall back to npx which works for npm/yarn or when knip is not local
+    let result;
+    if (hasLocalKnip) {
+      // Check if pnpm is available (pnpm-lock.yaml exists)
+      const hasPnpm = existsSync(join(rootPath, "pnpm-lock.yaml"));
+      if (hasPnpm) {
+        console.log("  Running via pnpm exec");
+        result = spawnSync("pnpm", ["exec", "knip", ...args], {
+          cwd: rootPath,
+          encoding: "utf-8",
+          shell: true,
+        });
+      } else {
+        console.log("  Running via npx (local package)");
+        result = runTool("knip", args, { cwd: rootPath, useNpx: true });
+      }
+    } else {
+      console.log("  Running via npx (global)");
+      result = runTool("knip", args, { cwd: rootPath, useNpx: true });
+    }
 
     // knip outputs JSON to stdout, exits with code 1 if issues found
     const output = result.stdout || "";
