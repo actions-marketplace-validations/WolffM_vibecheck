@@ -241,8 +241,12 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
     const localKnip = join(rootPath, "node_modules", ".bin", "knip");
     const useLocalBinary = existsSync(localKnip);
 
+    console.log(`  Checking for local knip at: ${localKnip} (exists: ${useLocalBinary})`);
+
     if (useLocalBinary) {
       console.log("  Using local knip from node_modules");
+    } else {
+      console.log("  Falling back to npx (local knip not found)");
     }
 
     const args = ["--reporter", "json"];
