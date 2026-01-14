@@ -8,11 +8,11 @@
 const unusedVariable = 'I am never used';
 
 // no-var: Use of var instead of let/const
-var oldStyleVariable = 'should use let or const';
+const oldStyleVariable = 'should use let or const';
 
 // prefer-const: Variable never reassigned
 // @ts-expect-error - Intentionally unused for testing ESLint rules
-let shouldBeConst = 'I am never reassigned';
+const shouldBeConst = 'I am never reassigned';
 
 // eqeqeq: Using == instead of ===
 function looseEquality(a: unknown) {

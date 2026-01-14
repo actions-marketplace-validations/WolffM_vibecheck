@@ -61,6 +61,14 @@ export function groupSafeAutofixFindings(
 ): Map<string, Set<string>> {
   const grouped = new Map<string, Set<string>>();
 
+  // Debug: Count autofix values
+  const autofixCounts: Record<string, number> = {};
+  for (const f of findings) {
+    const val = f.autofix || "undefined";
+    autofixCounts[val] = (autofixCounts[val] || 0) + 1;
+  }
+  console.log(`  Autofix distribution: ${JSON.stringify(autofixCounts)}`);
+
   for (const finding of findings) {
     // Only include findings with safe autofix
     if (finding.autofix !== "safe") {
