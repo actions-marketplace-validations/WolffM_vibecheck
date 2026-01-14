@@ -391,6 +391,7 @@ function mapEslintConfidence(ruleId: string | null): Finding["confidence"] {
  */
 export function parseEslintOutput(output: EslintOutput): Finding[] {
   const findings: Finding[] = [];
+  let fixableCount = 0;
 
   for (const fileResult of output) {
     const normalizedPath = normalizePath(fileResult.filePath);
@@ -398,6 +399,11 @@ export function parseEslintOutput(output: EslintOutput): Finding[] {
     for (const msg of fileResult.messages) {
       // Skip messages without a ruleId (parse errors handled separately)
       if (!msg.ruleId) continue;
+
+      // Track fixable issues for debugging
+      if (msg.fix) {
+        fixableCount++;
+      }
 
       const location: Location = {
         path: normalizedPath,
@@ -434,6 +440,11 @@ export function parseEslintOutput(output: EslintOutput): Finding[] {
         fingerprint: fingerprintFinding(finding),
       });
     }
+  }
+
+  // Debug: Log fixable findings count
+  if (fixableCount > 0) {
+    console.log(`    ESLint: ${fixableCount} fixable issues found`);
   }
 
   return findings;
