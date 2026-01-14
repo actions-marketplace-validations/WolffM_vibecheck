@@ -113,18 +113,27 @@ export function generateIssueTitle(finding: Finding): string {
   const maxLen = 100;
 
   // Build location hint based on number of unique files
+  // Skip if the title already contains the filename (e.g., from same-file-tool strategy)
   let locationHint = "";
   if (finding.locations.length > 0) {
     const uniqueFiles = [
       ...new Set(finding.locations.map((l) => l.path.split("/").pop())),
     ];
-    if (uniqueFiles.length === 1) {
-      locationHint = ` in ${uniqueFiles[0]}`;
-    } else if (uniqueFiles.length <= 3) {
-      // Show first file + count for small sets
-      locationHint = ` in ${uniqueFiles[0]} +${uniqueFiles.length - 1} more`;
+    const titleLower = finding.title.toLowerCase();
+    // Check if the title already contains the filename (case-insensitive)
+    const titleAlreadyHasFile = uniqueFiles.some(
+      (f) => f && titleLower.includes(f.toLowerCase())
+    );
+
+    if (!titleAlreadyHasFile) {
+      if (uniqueFiles.length === 1) {
+        locationHint = ` in ${uniqueFiles[0]}`;
+      } else if (uniqueFiles.length <= 3) {
+        // Show first file + count for small sets
+        locationHint = ` in ${uniqueFiles[0]} +${uniqueFiles.length - 1} more`;
+      }
+      // For many files, omit location hint (title already says "X files")
     }
-    // For many files, omit location hint (title already says "X files")
   }
 
   const title = `[vibeCheck] ${finding.title}${locationHint}`;

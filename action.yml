@@ -14,15 +14,11 @@ inputs:
   severity_threshold:
     description: "Minimum severity for issues: critical, high, medium, low, info"
     required: false
-    default: "info"
+    default: "medium"
   confidence_threshold:
     description: "Minimum confidence for issues: high, medium, low"
     required: false
     default: low
-  merge_strategy:
-    description: "How to merge findings: none, same-file, same-rule, same-linter, same-tool"
-    required: false
-    default: "same-rule"
   skip_issues:
     description: "Skip GitHub issue creation/updates"
     required: false
@@ -36,6 +32,10 @@ inputs:
     required: true
   create_config_pr:
     description: "Create a PR with generated config files (.trunk/, etc.) if they don't exist. Requires contents:write and pull-requests:write permissions."
+    required: false
+    default: "false"
+  autofix_prs:
+    description: "Create PRs for findings with safe autofixes (ESLint formatting, Ruff style). Requires contents:write and pull-requests:write permissions."
     required: false
     default: "false"
 
@@ -122,6 +122,30 @@ runs:
         # Install dependency-cruiser and knip globally for cross-repo analysis
         # These tools work without config files (depcruise uses --no-config, knip auto-detects)
         npm install -g dependency-cruiser knip
+
+    - name: Install Target Repo JS Dependencies
+      shell: bash
+      run: |
+        # Install target repo's node dependencies for ESLint and TypeScript analysis
+        # This is needed for modern ESLint configs that import packages
+        cd "${{ github.workspace }}"
+        if [ -f "package.json" ]; then
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "Installing dependencies with pnpm..."
+            pnpm install --frozen-lockfile || pnpm install
+          elif [ -f "yarn.lock" ]; then
+            echo "Installing dependencies with yarn..."
+            yarn install --frozen-lockfile || yarn install
+          elif [ -f "package-lock.json" ]; then
+            echo "Installing dependencies with npm..."
+            npm ci || npm install
+          else
+            echo "Installing dependencies with npm (no lockfile)..."
+            npm install
+          fi
+        else
+          echo "No package.json found, skipping JS dependency installation"
+        fi
 
     - name: Detect Java files
       id: detect-java
@@ -256,7 +280,6 @@ runs:
           --output "$OUTPUT_DIR" \
           --severity-threshold "${{ inputs.severity_threshold }}" \
           --confidence-threshold "${{ inputs.confidence_threshold }}" \
-          --merge-strategy "${{ inputs.merge_strategy }}" \
           ${{ inputs.skip_issues == 'true' && '--skip-issues' || '' }}
 
         # Set outputs
@@ -311,18 +334,40 @@ runs:
         if [ -f "$OUTPUT_DIR/results.llm.json" ]; then
           echo "## 🛡️ vibeCheck Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           TOTAL=$(jq '.summary.totalFindings // 0' $OUTPUT_DIR/results.llm.json)
           CREATED=$(jq '.summary.issuesCreated // 0' $OUTPUT_DIR/results.llm.json)
           UPDATED=$(jq '.summary.issuesUpdated // 0' $OUTPUT_DIR/results.llm.json)
           CLOSED=$(jq '.summary.issuesClosed // 0' $OUTPUT_DIR/results.llm.json)
-          
+
           echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Total Findings | $TOTAL |" >> $GITHUB_STEP_SUMMARY
           echo "| Issues Created | $CREATED |" >> $GITHUB_STEP_SUMMARY
           echo "| Issues Updated | $UPDATED |" >> $GITHUB_STEP_SUMMARY
           echo "| Issues Closed | $CLOSED |" >> $GITHUB_STEP_SUMMARY
+
+          # Show suppressed findings if any exist (below severity/confidence threshold)
+          SUPPRESSED_TOTAL=$(jq '.summary.suppressed.total // 0' $OUTPUT_DIR/results.llm.json)
+          if [ "$SUPPRESSED_TOTAL" -gt 0 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>ℹ️ <strong>$SUPPRESSED_TOTAL findings suppressed</strong> (below threshold)</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Severity | Suppressed |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|------------|" >> $GITHUB_STEP_SUMMARY
+
+            for sev in info low medium high critical; do
+              COUNT=$(jq ".summary.suppressed.bySeverity.$sev // 0" $OUTPUT_DIR/results.llm.json)
+              if [ "$COUNT" -gt 0 ]; then
+                echo "| $sev | $COUNT |" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Adjust \`severity_threshold\` or \`confidence_threshold\` to see these findings." >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
         fi
 
     - name: Create Config PR
@@ -391,5 +436,137 @@ runs:
           --body "Adds configuration files generated by vibeCheck. These enable faster subsequent runs and can be customized." \
           --head "$BRANCH_NAME" \
           --base "${{ github.ref_name }}"
-        
+
         echo "Created PR for config files"
+
+    - name: Run Autofixes
+      if: inputs.autofix_prs == 'true'
+      continue-on-error: true
+      shell: bash
+      run: |
+        OUTPUT_DIR="${{ github.workspace }}/.vibecheck-output"
+
+        # Check if results exist
+        if [ ! -f "$OUTPUT_DIR/results.llm.json" ]; then
+          echo "No results file found, skipping autofix"
+          exit 0
+        fi
+
+        # Run the TypeScript autofix runner
+        # This runs fix commands for all tools with safe autofix findings
+        echo "Running autofix commands..."
+        npx tsx ${{ github.action_path }}/src/tools/run-autofix.ts \
+          --results "$OUTPUT_DIR/results.llm.json" \
+          --root "${{ github.workspace }}" \
+          --output "$OUTPUT_DIR/autofix-results.json"
+
+    - name: Create Autofix PRs
+      if: inputs.autofix_prs == 'true'
+      continue-on-error: true
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        OUTPUT_DIR="${{ github.workspace }}/.vibecheck-output"
+        AUTOFIX_RESULTS="$OUTPUT_DIR/autofix-results.json"
+
+        # Check if autofix results exist
+        if [ ! -f "$AUTOFIX_RESULTS" ]; then
+          echo "No autofix results found, skipping PR creation"
+          exit 0
+        fi
+
+        # Configure git
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        # Get short SHA for branch naming
+        SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+        BASE_BRANCH="${{ github.ref_name }}"
+
+        # Read tools that had successful fixes from autofix results
+        TOOLS=$(jq -r '.results[] | select(.success == true and (.files | length) > 0) | .tool' "$AUTOFIX_RESULTS" 2>/dev/null)
+
+        if [ -z "$TOOLS" ]; then
+          echo "No tools with successful fixes, skipping PR creation"
+          exit 0
+        fi
+
+        echo "Tools with fixes: $TOOLS"
+
+        # Create PR for each tool
+        for TOOL in $TOOLS; do
+          echo ""
+          echo "=== Creating PR for $TOOL ==="
+
+          # Get files for this tool from autofix results
+          FILES=$(jq -r ".results[] | select(.tool == \"$TOOL\") | .files[]" "$AUTOFIX_RESULTS" 2>/dev/null | tr '\n' ' ')
+
+          if [ -z "$FILES" ] || [ "$FILES" = " " ]; then
+            echo "No files for $TOOL, skipping"
+            continue
+          fi
+
+          echo "Files: $FILES"
+
+          # Use stable branch name (without SHA) to avoid duplicates
+          BRANCH_NAME="vibecheck/autofix-$TOOL"
+
+          # Check if PR already exists for this tool (any open PR with vibecheck/autofix-$TOOL prefix)
+          EXISTING_PR=$(gh pr list --state open --json number,headRefName --jq ".[] | select(.headRefName | startswith(\"vibecheck/autofix-$TOOL\")) | .number" 2>/dev/null | head -1 || echo "")
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #$EXISTING_PR already exists for $TOOL autofix, skipping"
+            continue
+          fi
+
+          # Find related vibeCheck issue for this tool
+          TOOL_UPPER=$(echo "$TOOL" | tr '[:lower:]' '[:upper:]')
+          RELATED_ISSUE=$(gh issue list --label "tool:$TOOL" --label "vibeCheck" --state open --json number,title --jq '.[0] | "\(.number)|\(.title)"' 2>/dev/null || echo "")
+
+          if [ -n "$RELATED_ISSUE" ]; then
+            ISSUE_NUMBER=$(echo "$RELATED_ISSUE" | cut -d'|' -f1)
+            ISSUE_TITLE=$(echo "$RELATED_ISSUE" | cut -d'|' -f2)
+            PR_TITLE="fix: $ISSUE_TITLE"
+            CLOSES_LINE="Closes #$ISSUE_NUMBER"
+          else
+            PR_TITLE="fix: auto-fix $TOOL issues"
+            CLOSES_LINE=""
+          fi
+
+          # Create branch from base
+          git checkout "$BASE_BRANCH"
+          git checkout -b "$BRANCH_NAME"
+
+          # Check if there are changes to commit
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit for $TOOL"
+            git checkout "$BASE_BRANCH"
+            git branch -D "$BRANCH_NAME" 2>/dev/null || true
+            continue
+          fi
+
+          # Add only the fixed files and commit
+          git add $FILES 2>/dev/null || git add -A
+          git commit -m "$PR_TITLE"
+          git push origin "$BRANCH_NAME" --force
+
+          # Create PR with link to issue
+          PR_BODY="## Summary
+        Automated fixes for safe $TOOL issues detected by vibeCheck.
+
+        These are formatting/style fixes that are safe to apply automatically.
+
+        $CLOSES_LINE
+
+        ---
+        Generated by [vibeCheck](https://github.com/WolffM/vibecheck)"
+
+          gh pr create --title "$PR_TITLE" --body "$PR_BODY" --head "$BRANCH_NAME" --base "$BASE_BRANCH"
+
+          echo "Created autofix PR for $TOOL"
+          git checkout "$BASE_BRANCH"
+        done
+
+        echo ""
+        echo "Autofix PR creation complete"

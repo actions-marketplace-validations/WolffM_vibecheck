@@ -391,6 +391,7 @@ function mapEslintConfidence(ruleId: string | null): Finding["confidence"] {
  */
 export function parseEslintOutput(output: EslintOutput): Finding[] {
   const findings: Finding[] = [];
+  let fixableCount = 0;
 
   for (const fileResult of output) {
     const normalizedPath = normalizePath(fileResult.filePath);
@@ -398,6 +399,11 @@ export function parseEslintOutput(output: EslintOutput): Finding[] {
     for (const msg of fileResult.messages) {
       // Skip messages without a ruleId (parse errors handled separately)
       if (!msg.ruleId) continue;
+
+      // Track fixable issues for debugging
+      if (msg.fix) {
+        fixableCount++;
+      }
 
       const location: Location = {
         path: normalizedPath,
@@ -436,6 +442,11 @@ export function parseEslintOutput(output: EslintOutput): Finding[] {
     }
   }
 
+  // Debug: Log fixable findings count
+  if (fixableCount > 0) {
+    console.log(`    ESLint: ${fixableCount} fixable issues found`);
+  }
+
   return findings;
 }
 
@@ -458,10 +469,28 @@ export interface TrunkOutput {
   issues: TrunkIssue[];
 }
 
+/**
+ * Markdownlint rules that are purely stylistic preferences.
+ * These are downgraded to 'info' severity so they don't create issues by default.
+ */
+const MARKDOWNLINT_INFO_RULES = [
+  "MD026", // Trailing punctuation in heading
+  "MD036", // Emphasis used instead of a heading (bold text as heading)
+  "MD033", // Inline HTML (often intentional)
+  "MD041", // First line should be a top-level heading (not always applicable)
+];
+
 /** Map Trunk level to severity, with linter-specific adjustments */
-function mapTrunkSeverity(level: string, linter?: string): Finding["severity"] {
+function mapTrunkSeverity(level: string, linter?: string, ruleId?: string): Finding["severity"] {
   const normalized = level.toLowerCase().replace("level_", "");
-  
+
+  // Check for markdownlint rules that should be info severity
+  if (linter?.toLowerCase() === "markdownlint" && ruleId) {
+    if (MARKDOWNLINT_INFO_RULES.includes(ruleId)) {
+      return "info";
+    }
+  }
+
   // Style-focused linters: cap severity at medium
   if (linter) {
     const linterLower = linter.toLowerCase();
@@ -471,7 +500,7 @@ function mapTrunkSeverity(level: string, linter?: string): Finding["severity"] {
       }
     }
   }
-  
+
   switch (normalized) {
     case "high":
     case "error":
@@ -508,7 +537,7 @@ export function parseTrunkOutput(output: TrunkOutput): Finding[] {
       ruleId,
       title: `${issue.linter}: ${issue.code || "issue"}`,
       message: issue.message,
-      severity: mapTrunkSeverity(issue.level, issue.linter),
+      severity: mapTrunkSeverity(issue.level, issue.linter, issue.code),
       confidence: mapTrunkConfidence(issue.linter),
       location: buildLocation(issue.file, issue.line, issue.column),
       extraLabels: ["via:trunk"],

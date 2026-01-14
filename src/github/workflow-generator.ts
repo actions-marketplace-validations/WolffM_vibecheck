@@ -2,26 +2,23 @@
  * Workflow Generator Module
  *
  * Generates GitHub Actions workflow YAML for vibeCheck installation.
- * Used by tests. The install page (docs/install.html) has its own copy
- * that should be kept in sync with DEFAULT_MERGE_STRATEGY in types.ts.
+ * Used by tests. The install page (docs/install.html) has its own copy.
  */
-
-import { DEFAULT_MERGE_STRATEGY, type MergeStrategy } from "../core/types.js";
 
 export interface WorkflowOptions {
   cadence: 'manual' | 'daily' | 'weekly' | 'monthly';
   severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
   confidence: 'low' | 'medium' | 'high';
-  mergeStrategy: MergeStrategy;
   disabledTools: string[];
+  autofixPrs?: boolean;
 }
 
 export const DEFAULTS: WorkflowOptions = {
   cadence: 'manual',
   severity: 'low',
   confidence: 'medium',
-  mergeStrategy: DEFAULT_MERGE_STRATEGY,
   disabledTools: [],
+  autofixPrs: false,
 };
 
 export const DEFAULT_TOOLS = [
@@ -60,7 +57,7 @@ export function getCronForCadence(cadence: WorkflowOptions['cadence']): string |
  * Generate workflow YAML based on options
  */
 export function generateWorkflow(options: WorkflowOptions): string {
-  const { cadence, severity, confidence, mergeStrategy, disabledTools } = options;
+  const { cadence, severity, confidence, disabledTools, autofixPrs } = options;
   const cron = getCronForCadence(cadence);
 
   // Build the on: section based on cadence
@@ -80,6 +77,21 @@ export function generateWorkflow(options: WorkflowOptions): string {
   workflow_dispatch:`;
   }
 
+  // Build permissions section - add write permissions if autofix is enabled
+  let permissionsSection: string;
+  if (autofixPrs) {
+    permissionsSection = `permissions:
+  contents: write      # Required for autofix PRs
+  issues: write
+  pull-requests: write # Required for autofix PRs
+  security-events: write`;
+  } else {
+    permissionsSection = `permissions:
+  contents: read
+  issues: write
+  security-events: write`;
+  }
+
   // Build the workflow
   let yaml = `# vibeCheck Workflow
 #
@@ -90,10 +102,7 @@ name: vibeCheck
 
 ${onSection}
 
-permissions:
-  contents: read
-  issues: write
-  security-events: write
+${permissionsSection}
 
 jobs:
   analyze:
@@ -118,8 +127,10 @@ jobs:
   if (confidence !== 'low') {
     yaml += `\n          confidence_threshold: "${confidence}"`;
   }
-  if (mergeStrategy !== 'same-rule') {
-    yaml += `\n          merge_strategy: "${mergeStrategy}"`;
+
+  // Add autofix_prs if enabled
+  if (autofixPrs) {
+    yaml += `\n          autofix_prs: true`;
   }
 
   // If tools are disabled, add comments about it

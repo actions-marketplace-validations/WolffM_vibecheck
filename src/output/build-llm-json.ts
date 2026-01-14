@@ -43,6 +43,16 @@ function buildSummary(
   confidenceThreshold: Confidence,
 ): LlmJsonSummary {
   const bySeverity: Record<Severity, number> = {
+    info: 0,
+    low: 0,
+    medium: 0,
+    high: 0,
+    critical: 0,
+  };
+
+  // Track suppressed findings (below threshold) by severity
+  const suppressedBySeverity: Record<Severity, number> = {
+    info: 0,
     low: 0,
     medium: 0,
     high: 0,
@@ -66,7 +76,7 @@ function buildSummary(
       highConfidence++;
     }
 
-    // Count actionable (meets thresholds)
+    // Count actionable (meets thresholds) vs suppressed
     if (
       meetsThresholds(
         finding.severity,
@@ -76,8 +86,17 @@ function buildSummary(
       )
     ) {
       actionable++;
+    } else {
+      // Track suppressed findings by their severity level
+      suppressedBySeverity[finding.severity]++;
     }
   }
+
+  // Calculate total suppressed
+  const totalSuppressed = Object.values(suppressedBySeverity).reduce(
+    (a, b) => a + b,
+    0,
+  );
 
   return {
     totalFindings: stats.totalFindings,
@@ -87,6 +106,13 @@ function buildSummary(
     actionable,
     bySeverity,
     byTool,
+    // Only include suppressed section if there are suppressed findings
+    ...(totalSuppressed > 0 && {
+      suppressed: {
+        bySeverity: suppressedBySeverity,
+        total: totalSuppressed,
+      },
+    }),
   };
 }
 

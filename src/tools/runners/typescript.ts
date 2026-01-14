@@ -236,11 +236,23 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
   console.log("Running knip...");
 
   try {
-    const { available, useNpx } = isToolAvailable("knip");
-    if (!available) {
-      console.log("  knip not installed, skipping");
-      return [];
+    // Check if this project has knip installed locally (check package.json)
+    const packageJsonPath = join(rootPath, "package.json");
+    let hasLocalKnip = false;
+
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+        const allDeps = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
+        hasLocalKnip = "knip" in allDeps;
+      } catch {
+        // Ignore parse errors
+      }
     }
+
 
     const args = ["--reporter", "json"];
 
@@ -262,19 +274,39 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
       console.log("  Running with auto-detection (no config file)");
     }
 
-    const result = runTool("knip", args, { cwd: rootPath, useNpx });
+    // Use pnpm exec if knip is a local dependency (handles pnpm's module resolution)
+    // Otherwise fall back to npx which works for npm/yarn or when knip is not local
+    let result;
+    if (hasLocalKnip) {
+      // Check if pnpm is available (pnpm-lock.yaml exists)
+      const hasPnpm = existsSync(join(rootPath, "pnpm-lock.yaml"));
+      if (hasPnpm) {
+        // Set NODE_PATH to ensure knip can resolve modules from the target repo
+        const nodeModulesPath = join(rootPath, "node_modules");
+        const env = {
+          ...process.env,
+          NODE_PATH: nodeModulesPath,
+        };
+        result = spawnSync("pnpm", ["exec", "knip", ...args], {
+          cwd: rootPath,
+          encoding: "utf-8",
+          shell: true,
+          env,
+        });
+      } else {
+        result = runTool("knip", args, { cwd: rootPath, useNpx: true });
+      }
+    } else {
+      result = runTool("knip", args, { cwd: rootPath, useNpx: true });
+    }
 
     // knip outputs JSON to stdout, exits with code 1 if issues found
     const output = result.stdout || "";
     const stderr = result.stderr || "";
 
-    // Check for known non-fatal errors (e.g., missing ESLint dependencies)
-    // These don't prevent knip from running, just from analyzing ESLint config
-    if (stderr.includes("Error loading") && stderr.includes("eslint.config")) {
-      console.log(
-        "  Note: ESLint config loading failed (missing dependencies in target repo)",
-      );
-      console.log("  Knip will still analyze other aspects of the codebase");
+    // Log error if knip crashed (exit code 2)
+    if (result.status === 2) {
+      console.log(`  knip error: ${stderr.substring(0, 200)}`);
     }
 
     const parsed = safeParseJson<KnipOutput>(output);
@@ -285,6 +317,8 @@ export function runKnip(rootPath: string, configPath?: string): Finding[] {
     } else if (stderr && !stderr.includes("Error loading")) {
       // Only log stderr if it's not the known ESLint loading issue
       console.log(`  stderr: ${stderr.substring(0, 200)}`);
+    } else if (!output.trim()) {
+      console.log("  Warning: knip returned empty output");
     }
   } catch (error) {
     console.warn("knip failed:", error);
@@ -301,13 +335,6 @@ export function runEslint(rootPath: string): Finding[] {
   console.log("Running ESLint...");
 
   try {
-    // Check if ESLint is available
-    const { available, useNpx } = isToolAvailable("eslint");
-    if (!available) {
-      console.log("  ESLint not installed, skipping");
-      return [];
-    }
-
     // Check for ESLint config
     const configFile = findConfigFile(rootPath, [
       "eslint.config.mjs",
@@ -340,6 +367,8 @@ export function runEslint(rootPath: string): Finding[] {
       return [];
     }
 
+    console.log(`  Scanning directories: ${srcDirs.join(", ")}`);
+
     // Run ESLint with JSON output
     const args = [
       ...srcDirs,
@@ -347,7 +376,58 @@ export function runEslint(rootPath: string): Finding[] {
       "--no-error-on-unmatched-pattern",
     ];
 
-    const result = runTool("eslint", args, { cwd: rootPath, useNpx });
+    // Check if ESLint is a local dependency - need to use pnpm exec to resolve config imports
+    const packageJsonPath = join(rootPath, "package.json");
+    let hasLocalEslint = false;
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+        const allDeps = {
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies,
+        };
+        hasLocalEslint = "eslint" in allDeps;
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    let result;
+    // Check if node_modules are installed (eslint exists locally)
+    const hasNodeModules = existsSync(join(rootPath, "node_modules", "eslint"));
+
+    // Modern ESLint configs (eslint.config.mjs) require local dependencies to be installed
+    // because they import packages like @eslint/js and typescript-eslint
+    const isModernConfig = configFile.endsWith(".mjs") || configFile.endsWith("eslint.config.js");
+
+    if (hasLocalEslint && hasNodeModules) {
+      // Use pnpm exec for pnpm projects to properly resolve local dependencies
+      const hasPnpm = existsSync(join(rootPath, "pnpm-lock.yaml"));
+      if (hasPnpm) {
+        console.log("  Using pnpm exec for local ESLint");
+        result = spawnSync("pnpm", ["exec", "eslint", ...args], {
+          cwd: rootPath,
+          encoding: "utf-8",
+          shell: true,
+        });
+      } else {
+        // Try npx with local eslint
+        result = runTool("eslint", args, { cwd: rootPath, useNpx: true });
+      }
+    } else if (isModernConfig && !hasNodeModules) {
+      // Modern configs require imports - skip if dependencies not installed
+      console.log("  Skipping: modern ESLint config requires installed dependencies");
+      console.log("  Install node_modules to enable ESLint analysis");
+      return [];
+    } else {
+      // Fall back to global/npx eslint for legacy configs
+      const { available, useNpx } = isToolAvailable("eslint");
+      if (!available) {
+        console.log("  ESLint not installed, skipping");
+        return [];
+      }
+      result = runTool("eslint", args, { cwd: rootPath, useNpx });
+    }
 
     // ESLint exits with code 1 when there are linting errors
     // The JSON output is in stdout regardless
@@ -355,16 +435,32 @@ export function runEslint(rootPath: string): Finding[] {
 
     if (!output.trim()) {
       console.log("  No output from ESLint");
+      // Log stderr to help diagnose issues
+      if (result.stderr) {
+        console.log(`  stderr: ${result.stderr.substring(0, 500)}`);
+      }
+      if (result.status !== null && result.status !== 0 && result.status !== 1) {
+        console.log(`  Exit code: ${result.status}`);
+      }
       return [];
     }
 
-    const parsed = safeParseJson<EslintOutput>(output);
+    // pnpm exec may prefix output with messages - try to find JSON array
+    let jsonOutput = output;
+    const jsonStart = output.indexOf("[");
+    if (jsonStart > 0) {
+      console.log(`  Note: Extracting JSON from position ${jsonStart}`);
+      jsonOutput = output.substring(jsonStart);
+    }
+
+    const parsed = safeParseJson<EslintOutput>(jsonOutput);
     if (parsed) {
       const findings = parseEslintOutput(parsed);
       console.log(`  Found ${findings.length} findings`);
       return findings;
     } else {
       console.log("  Failed to parse ESLint output");
+      console.log(`  Output preview: ${output.substring(0, 300)}`);
       if (result.stderr) {
         console.log(`  stderr: ${result.stderr.substring(0, 200)}`);
       }

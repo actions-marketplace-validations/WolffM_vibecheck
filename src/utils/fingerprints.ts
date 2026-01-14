@@ -210,20 +210,46 @@ export function groupByFingerprint<T extends { fingerprint: string }>(
 }
 
 /**
- * Deduplicate findings by fingerprint.
- * Returns unique findings (first occurrence of each fingerprint).
+ * Rank autofix values for comparison.
+ * Higher is better (safe > requires_review > none).
  */
-export function deduplicateFindings<T extends { fingerprint: string }>(
+function autofixRank(autofix: string | undefined): number {
+  switch (autofix) {
+    case "safe": return 2;
+    case "requires_review": return 1;
+    default: return 0;
+  }
+}
+
+/**
+ * Deduplicate findings by fingerprint.
+ * When duplicates are found, keeps the one with the best autofix value
+ * (safe > requires_review > none) to preserve autofix information from
+ * standalone tool runs over Trunk-wrapped findings.
+ */
+export function deduplicateFindings<T extends { fingerprint: string; autofix?: string }>(
   items: T[],
 ): T[] {
-  const seen = new Set<string>();
+  const seen = new Map<string, { index: number; item: T }>();
   const unique: T[] = [];
+
   for (const item of items) {
-    if (!seen.has(item.fingerprint)) {
-      seen.add(item.fingerprint);
+    const existing = seen.get(item.fingerprint);
+    if (!existing) {
+      seen.set(item.fingerprint, { index: unique.length, item });
       unique.push(item);
+    } else {
+      // Compare autofix values - keep the better one
+      const existingRank = autofixRank(existing.item.autofix);
+      const newRank = autofixRank(item.autofix);
+      if (newRank > existingRank) {
+        // Replace with the better autofix finding
+        unique[existing.index] = item;
+        seen.set(item.fingerprint, { index: existing.index, item });
+      }
     }
   }
+
   return unique;
 }
 
@@ -292,6 +318,10 @@ function buildMergeKey(finding: Finding, strategy: MergeStrategy): string {
       const sublinter = extractSublinter(finding);
       return `${tool}|${sublinter}`;
     }
+    case "same-file-tool":
+      // Group by file + tool (all findings from same tool in same file)
+      // This creates one issue per file per tool for better parallelism
+      return `${tool}|${file}`;
     default:
       return finding.fingerprint;
   }
@@ -507,9 +537,9 @@ function mergeFindings(
     baseMessage = base.message;
   }
 
-  // Add rule summary when multiple rules are merged (same-linter strategy)
+  // Add rule summary when multiple rules are merged (same-linter or same-file-tool strategy)
   let ruleSummary = "";
-  if (strategy === "same-linter" && uniqueRules.length > 1) {
+  if ((strategy === "same-linter" || strategy === "same-file-tool") && uniqueRules.length > 1) {
     // Get short names for each rule for cleaner display
     const shortRuleNames = uniqueRules.map((r) => {
       // Extract last meaningful part of rule ID
@@ -529,6 +559,10 @@ function mergeFindings(
     // For same-linter merge with multiple rules, use sublinter name
     const sublinter = extractSublinter(base);
     title = `${sublinter} (${allLocations.length} issues across ${uniqueRules.length} rules)`;
+  } else if (strategy === "same-file-tool" && uniqueRules.length > 1) {
+    // For same-file-tool merge with multiple rules, show tool + file + rule count
+    const fileName = uniqueFiles[0]?.split("/").pop() || uniqueFiles[0];
+    title = `${base.tool}: ${fileName} (${allLocations.length} issues across ${uniqueRules.length} rules)`;
   } else if (allLocations.length > 1) {
     // For jscpd, don't add occurrence count - the title already shows "X lines" of duplication
     // Adding "(Y occurrences)" is redundant and confusing
@@ -541,6 +575,16 @@ function mergeFindings(
     title = base.title;
   }
 
+  // Compute most conservative autofix level from all findings
+  // Use MINIMUM to be safe - if any finding can't be auto-fixed, the merged finding shouldn't either
+  const autofixPriority = { none: 0, requires_review: 1, safe: 2 };
+  let worstAutofix = base.autofix;
+  for (const f of findings) {
+    if (autofixPriority[f.autofix] < autofixPriority[worstAutofix]) {
+      worstAutofix = f.autofix;
+    }
+  }
+
   // Create merged finding
   const merged: Omit<Finding, "fingerprint"> = {
     ...base,
@@ -548,9 +592,10 @@ function mergeFindings(
     evidence: combinedEvidence,
     message,
     title,
-    // For same-linter merges, update ruleId to reflect multiple rules
+    autofix: worstAutofix,
+    // For same-linter and same-file-tool merges, update ruleId to reflect multiple rules
     ruleId:
-      strategy === "same-linter" && uniqueRules.length > 1
+      (strategy === "same-linter" || strategy === "same-file-tool") && uniqueRules.length > 1
         ? uniqueRules.join("+")
         : base.ruleId,
   };

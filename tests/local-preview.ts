@@ -10,7 +10,6 @@
 import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { analyze } from "../src/core/analyze.js";
-import { DEFAULT_MERGE_STRATEGY } from "../src/core/types.js";
 import {
   generateIssueBody,
   generateIssueTitle,
@@ -34,12 +33,12 @@ interface IssuePreview {
 
 async function main() {
   const outputDir = join(process.cwd(), ".vibecheck-test-output");
-  
+
   // Clean up previous test output
   if (existsSync(outputDir)) {
     rmSync(outputDir, { recursive: true, force: true });
   }
-  
+
   // Create fresh output directory
   mkdirSync(outputDir, { recursive: true });
 
@@ -60,7 +59,6 @@ async function main() {
     skipIssues: true,
     severityThreshold: "low",
     confidenceThreshold: "medium",
-    mergeStrategy: DEFAULT_MERGE_STRATEGY,
     outputDir,
   });
 

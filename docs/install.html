@@ -480,20 +480,14 @@
               </select>
             </div>
           </div>
-        </div>
-
-        <!-- Issue Management -->
-        <div class="option-group">
-          <h4>Issue Management</h4>
-          <div class="option-row">
-            <div class="option-field">
-              <label for="mergeStrategy">Merge Strategy <span class="info-icon">i<span class="tooltip">How to group related findings into issues. "Same rule" creates one issue per rule across all files.</span></span></label>
-              <select id="mergeStrategy">
-                <option value="none">None - one issue per finding</option>
-                <option value="same-file">Same file + rule</option>
-                <option value="same-rule" selected>Same rule (default)</option>
-              </select>
-            </div>
+          <div style="margin-top: 16px;">
+            <label class="tool-item" style="background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+              <input type="checkbox" id="autofixPrs" name="autofixPrs">
+              <div class="tool-info">
+                <div class="tool-name">Create Autofix PRs <span class="info-icon">i<span class="tooltip">Automatically create PRs for safe fixes (ESLint formatting, Ruff style). Requires additional permissions.</span></span></div>
+                <div class="tool-desc">Auto-create PRs for safe formatting fixes</div>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -648,12 +642,12 @@
   </div>
 
   <script>
-    // Default values - keep mergeStrategy in sync with DEFAULT_MERGE_STRATEGY in src/core/types.ts
+    // Default values
     const DEFAULTS = {
       cadence: 'manual',
       severity: 'low',
       confidence: 'medium',
-      mergeStrategy: 'same-rule'  // Source of truth: src/core/types.ts
+      autofixPrs: false
     };
 
     // All tools that are enabled by default
@@ -671,7 +665,7 @@
 
     // Generate workflow YAML based on options
     function generateWorkflow(options) {
-      const { cadence, severity, confidence, mergeStrategy, disabledTools } = options;
+      const { cadence, severity, confidence, disabledTools, autofixPrs } = options;
       const cron = getCronForCadence(cadence);
 
       // Check if using non-default values
@@ -679,8 +673,8 @@
         cadence !== DEFAULTS.cadence ||
         severity !== DEFAULTS.severity ||
         confidence !== DEFAULTS.confidence ||
-        mergeStrategy !== DEFAULTS.mergeStrategy ||
-        disabledTools.length > 0;
+        disabledTools.length > 0 ||
+        autofixPrs;
 
       // Build the on: section based on cadence
       let onSection;
@@ -699,6 +693,21 @@
   workflow_dispatch:`;
       }
 
+      // Build permissions section - add write permissions if autofix is enabled
+      let permissionsSection;
+      if (autofixPrs) {
+        permissionsSection = `permissions:
+  contents: write      # Required for autofix PRs
+  issues: write
+  pull-requests: write # Required for autofix PRs
+  security-events: write`;
+      } else {
+        permissionsSection = `permissions:
+  contents: read
+  issues: write
+  security-events: write`;
+      }
+
       // Build the workflow
       let yaml = `# vibeCheck Workflow
 #
@@ -709,10 +718,7 @@ name: vibeCheck
 
 ${onSection}
 
-permissions:
-  contents: read
-  issues: write
-  security-events: write
+${permissionsSection}
 
 jobs:
   analyze:
@@ -737,8 +743,10 @@ jobs:
       if (confidence !== 'low') {
         yaml += `\n          confidence_threshold: "${confidence}"`;
       }
-      if (mergeStrategy !== 'same-rule') {
-        yaml += `\n          merge_strategy: "${mergeStrategy}"`;
+
+      // Add autofix_prs if enabled
+      if (autofixPrs) {
+        yaml += `\n          autofix_prs: true`;
       }
 
       // If tools are disabled, we need a config file
@@ -761,7 +769,7 @@ jobs:
       const cadence = document.getElementById('cadence').value;
       const severity = document.getElementById('severity').value;
       const confidence = document.getElementById('confidence').value;
-      const mergeStrategy = document.getElementById('mergeStrategy').value;
+      const autofixPrs = document.getElementById('autofixPrs').checked;
 
       // Get disabled tools (unchecked checkboxes)
       const allTools = document.querySelectorAll('input[name="tool"]');
@@ -772,7 +780,7 @@ jobs:
         }
       });
 
-      return { cadence, severity, confidence, mergeStrategy, disabledTools };
+      return { cadence, severity, confidence, disabledTools, autofixPrs };
     }
 
     const form = document.getElementById('installForm');
@@ -842,8 +850,8 @@ jobs:
         options.cadence !== DEFAULTS.cadence ||
         options.severity !== DEFAULTS.severity ||
         options.confidence !== DEFAULTS.confidence ||
-        options.mergeStrategy !== DEFAULTS.mergeStrategy ||
-        options.disabledTools.length > 0;
+        options.disabledTools.length > 0 ||
+        options.autofixPrs !== DEFAULTS.autofixPrs;
 
       document.getElementById('customIndicator').classList.toggle('show', isCustom);
     }

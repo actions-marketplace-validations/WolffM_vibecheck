@@ -22,6 +22,22 @@ import { MAX_OUTPUT_BUFFER } from "../../utils/shared.js";
 export const EXCLUDE_DIRS_RUST = "target,.cargo";
 
 /**
+ * Adjust finding paths to be relative to rootPath when running in a subdirectory.
+ */
+function adjustFindingPaths(findings: Finding[], cargoDir: string, rootPath: string): void {
+  if (cargoDir === rootPath) return;
+
+  const relDir = relative(rootPath, cargoDir);
+  for (const finding of findings) {
+    for (const loc of finding.locations) {
+      if (loc.path && !loc.path.startsWith(relDir)) {
+        loc.path = `${relDir}/${loc.path}`;
+      }
+    }
+  }
+}
+
+/**
  * Run Clippy linter for Rust code.
  * Searches for Cargo.toml in root and common subdirectories.
  */
@@ -87,17 +103,7 @@ export function runClippy(rootPath: string, _configPath?: string): Finding[] {
 
       if (messages.length > 0) {
         const findings = parseClippyOutput(messages);
-        // Adjust file paths to be relative to rootPath
-        for (const finding of findings) {
-          if (cargoDir !== rootPath) {
-            const relDir = relative(rootPath, cargoDir);
-            for (const loc of finding.locations) {
-              if (loc.path && !loc.path.startsWith(relDir)) {
-                loc.path = `${relDir}/${loc.path}`;
-              }
-            }
-          }
-        }
+        adjustFindingPaths(findings, cargoDir, rootPath);
         allFindings.push(...findings);
       }
     }
@@ -151,17 +157,7 @@ export function runCargoAudit(rootPath: string): Finding[] {
       const parsed = safeParseJson<CargoAuditOutput>(output);
       if (parsed) {
         const findings = parseCargoAuditOutput(parsed);
-        // Adjust file paths to be relative to rootPath
-        for (const finding of findings) {
-          if (cargoDir !== rootPath) {
-            const relDir = relative(rootPath, cargoDir);
-            for (const loc of finding.locations) {
-              if (loc.path && !loc.path.startsWith(relDir)) {
-                loc.path = `${relDir}/${loc.path}`;
-              }
-            }
-          }
-        }
+        adjustFindingPaths(findings, cargoDir, rootPath);
         allFindings.push(...findings);
       }
     }
@@ -239,17 +235,7 @@ export function runCargoDeny(rootPath: string, configPath?: string): Finding[] {
 
       if (diagnostics.length > 0) {
         const findings = parseCargoDenyOutput({ diagnostics } as CargoDenyOutput);
-        // Adjust file paths to be relative to rootPath
-        for (const finding of findings) {
-          if (cargoDir !== rootPath) {
-            const relDir = relative(rootPath, cargoDir);
-            for (const loc of finding.locations) {
-              if (loc.path && !loc.path.startsWith(relDir)) {
-                loc.path = `${relDir}/${loc.path}`;
-              }
-            }
-          }
-        }
+        adjustFindingPaths(findings, cargoDir, rootPath);
         allFindings.push(...findings);
       }
     }

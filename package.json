@@ -29,21 +29,21 @@
     "analyze": "tsx src/core/analyze.ts"
   },
   "dependencies": {
-    "@octokit/rest": "^21.0.0",
+    "@octokit/rest": "^22.0.1",
     "tsx": "^4.7.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
-    "@types/node": "^20.10.0",
-    "@vitest/coverage-v8": "^2.0.0",
+    "@types/node": "^25.0.8",
+    "@vitest/coverage-v8": "^4.0.17",
     "dependency-cruiser": "^17.0.0",
     "eslint": "^9.0.0",
     "globals": "^17.0.0",
-    "jscpd": "^4.0.0",
-    "knip": "^5.0.0",
+    "jscpd": "^4.0.7",
+    "knip": "^5.80.2",
     "typescript": "^5.3.0",
-    "typescript-eslint": "^8.0.0",
-    "vitest": "^2.0.0"
+    "typescript-eslint": "^8.53.0",
+    "vitest": "^4.0.17"
   },
   "packageManager": "pnpm@9.0.0",
   "license": "MIT",

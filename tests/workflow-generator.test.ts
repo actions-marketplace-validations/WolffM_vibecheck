@@ -72,13 +72,6 @@ describe('generateWorkflow', () => {
       expect(yaml).toContain('confidence_threshold: "medium"');
     });
 
-    it('should not include merge_strategy when using default', () => {
-      const options = createTestOptions();
-      const yaml = generateWorkflow(options);
-
-      // Default merge strategy is 'same-rule', should not appear
-      expect(yaml).not.toContain('merge_strategy:');
-    });
   });
 
   describe('cadence options', () => {
@@ -168,29 +161,6 @@ describe('generateWorkflow', () => {
     });
   });
 
-  describe('merge strategy options', () => {
-    it('should omit merge_strategy for same-rule (default)', () => {
-      const options = createTestOptions({ mergeStrategy: 'same-rule' });
-      const yaml = generateWorkflow(options);
-
-      expect(yaml).not.toContain('merge_strategy:');
-    });
-
-    it('should include merge_strategy for none', () => {
-      const options = createTestOptions({ mergeStrategy: 'none' });
-      const yaml = generateWorkflow(options);
-
-      expect(yaml).toContain('merge_strategy: "none"');
-    });
-
-    it('should include merge_strategy for same-file', () => {
-      const options = createTestOptions({ mergeStrategy: 'same-file' });
-      const yaml = generateWorkflow(options);
-
-      expect(yaml).toContain('merge_strategy: "same-file"');
-    });
-  });
-
   describe('disabled tools', () => {
     it('should not add comments when no tools disabled', () => {
       const options = createTestOptions({ disabledTools: [] });
@@ -223,7 +193,6 @@ describe('generateWorkflow', () => {
         cadence: 'daily',
         severity: 'high',
         confidence: 'high',
-        mergeStrategy: 'same-file',
         disabledTools: ['jscpd', 'knip'],
       });
       const yaml = generateWorkflow(options);
@@ -231,9 +200,43 @@ describe('generateWorkflow', () => {
       expect(yaml).toContain('cron: "0 3 * * *"');
       expect(yaml).toContain('severity_threshold: "high"');
       expect(yaml).toContain('confidence_threshold: "high"');
-      expect(yaml).toContain('merge_strategy: "same-file"');
       expect(yaml).toContain('#   jscpd: { enabled: false }');
       expect(yaml).toContain('#   knip: { enabled: false }');
+    });
+  });
+
+  describe('autofix PRs option', () => {
+    it('should not include autofix_prs by default', () => {
+      const options = createTestOptions();
+      const yaml = generateWorkflow(options);
+
+      expect(yaml).not.toContain('autofix_prs');
+      expect(yaml).toContain('contents: read');
+      expect(yaml).not.toContain('contents: write');
+      expect(yaml).not.toContain('pull-requests: write');
+    });
+
+    it('should include autofix_prs when enabled', () => {
+      const options = createTestOptions({ autofixPrs: true });
+      const yaml = generateWorkflow(options);
+
+      expect(yaml).toContain('autofix_prs: true');
+    });
+
+    it('should add write permissions when autofix_prs is enabled', () => {
+      const options = createTestOptions({ autofixPrs: true });
+      const yaml = generateWorkflow(options);
+
+      expect(yaml).toContain('contents: write');
+      expect(yaml).toContain('pull-requests: write');
+      expect(yaml).not.toContain('contents: read');
+    });
+
+    it('should include comments about required permissions', () => {
+      const options = createTestOptions({ autofixPrs: true });
+      const yaml = generateWorkflow(options);
+
+      expect(yaml).toContain('# Required for autofix PRs');
     });
   });
 });
@@ -243,7 +246,6 @@ describe('DEFAULTS', () => {
     expect(DEFAULTS.cadence).toBe('manual');
     expect(DEFAULTS.severity).toBe('low');
     expect(DEFAULTS.confidence).toBe('medium');
-    expect(DEFAULTS.mergeStrategy).toBe('same-rule');
   });
 });
 

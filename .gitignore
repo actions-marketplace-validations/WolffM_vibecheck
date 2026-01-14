@@ -2,6 +2,9 @@
 .vibecheck-output/
 .vibecheck-verbose-output/
 .vibecheck-test-output/
+.vibecheck-analysis/
+
+tmpclaude-*
 
 # Dependencies
 node_modules/

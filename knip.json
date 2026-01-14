@@ -3,5 +3,7 @@
   "entry": ["src/core/run-analyze.ts"],
   "project": ["src/**/*.ts"],
   "ignore": ["tests/**/*.ts", "test-fixtures/**/*.ts"],
-  "ignoreDependencies": ["jscpd"]
+  "ignoreDependencies": ["jscpd"],
+  "eslint": false,
+  "vitest": false
 }

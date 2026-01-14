@@ -1,52 +1,72 @@
-# vibeCheck Workflow
-#
-# This workflow runs vibeCheck static analysis on your repository.
-# Copy this file to .github/workflows/vibecheck.yml in your repository.
-#
-# For more info: https://github.com/WolffM/vibecheck
-
 name: vibeCheck
-
 on:
-  # Run weekly on Monday at 3am UTC
-  schedule:
-    - cron: 0 3 * * 1
-
-  # Run on push to main (daily cadence)
-  push:
-    branches: [main, master]
-
-  # Allow manual trigger
   workflow_dispatch:
-    inputs:
-      cadence:
-        description: Analysis cadence
-        required: false
-        default: weekly
-        type: choice
-        options:
-          - daily
-          - weekly
-          - monthly
-      skip_issues:
-        description: Skip issue creation (dry run)
-        required: false
-        default: false
-        type: boolean
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
   security-events: write
 
 jobs:
-  analyze:
-    name: Static Analysis
+  # Stage 1: Setup and Detect Languages
+  setup:
+    name: 🔧 Setup
     runs-on: ubuntu-latest
-
+    outputs:
+      has_js: ${{ steps.detect.outputs.has_js }}
+      has_python: ${{ steps.detect.outputs.has_python }}
+      has_java: ${{ steps.detect.outputs.has_java }}
+      has_rust: ${{ steps.detect.outputs.has_rust }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect languages
+        id: detect
+        run: |
+          # Detect JavaScript/TypeScript
+          if find . -name "*.ts" -o -name "*.js" -o -name "*.tsx" -o -name "*.jsx" 2>/dev/null | head -1 | grep -q .; then
+            echo "has_js=true" >> $GITHUB_OUTPUT
+            echo "✓ JavaScript/TypeScript detected"
+          else
+            echo "has_js=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Detect Python
+          if find . -name "*.py" 2>/dev/null | head -1 | grep -q .; then
+            echo "has_python=true" >> $GITHUB_OUTPUT
+            echo "✓ Python detected"
+          else
+            echo "has_python=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Detect Java
+          if find . -name "*.java" -o -name "pom.xml" -o -name "build.gradle*" 2>/dev/null | head -1 | grep -q .; then
+            echo "has_java=true" >> $GITHUB_OUTPUT
+            echo "✓ Java detected"
+          else
+            echo "has_java=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Detect Rust
+          if [ -f "Cargo.toml" ]; then
+            echo "has_rust=true" >> $GITHUB_OUTPUT
+            echo "✓ Rust detected"
+          else
+            echo "has_rust=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Stage 2: Run Analysis
+  analyze:
+    name: 🔍 Static Analysis
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -54,17 +74,49 @@ jobs:
         uses: WolffM/vibecheck@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          cadence: ${{ github.event.inputs.cadence || 'weekly' }}
-          severity_threshold: low
+          cadence: weekly
+          severity_threshold: info
           confidence_threshold: medium
-          skip_issues: ${{ github.event.inputs.skip_issues || 'false' }}
-          # merge_strategy defaults to same-rule (one issue per rule)
+          skip_issues: false
+          autofix_prs: true
 
-      - name: Upload artifacts
+      - name: Upload analysis results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@v4
         with:
           name: vibecheck-results
           path: .vibecheck-output/
           retention-days: 14
           if-no-files-found: ignore
+
+  # Stage 3: Summary
+  summary:
+    name: 📊 Summary
+    needs: analyze
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          name: vibecheck-results
+          path: .vibecheck-output/
+        continue-on-error: true
+
+      - name: Generate summary
+        run: |
+          echo "# vibeCheck Analysis Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f ".vibecheck-output/results.llm.json" ]; then
+            FINDINGS=$(jq '.findings | length' .vibecheck-output/results.llm.json 2>/dev/null || echo "0")
+            echo "📋 **Total Findings:** $FINDINGS" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -f ".vibecheck-output/autofix-results.json" ]; then
+            FIXED=$(jq '.toolsSucceeded' .vibecheck-output/autofix-results.json 2>/dev/null || echo "0")
+            echo "🔧 **Tools with Auto-fixes:** $FIXED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See the [Issues](../../issues?q=label%3AvibCheck) for details." >> $GITHUB_STEP_SUMMARY

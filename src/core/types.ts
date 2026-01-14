@@ -11,7 +11,7 @@
 
 export type Cadence = "daily" | "weekly" | "monthly";
 type ToolEnablement = "auto" | boolean | Cadence;
-export type Severity = "low" | "medium" | "high" | "critical";
+export type Severity = "info" | "low" | "medium" | "high" | "critical";
 export type Confidence = "low" | "medium" | "high";
 export type AutofixLevel = "none" | "safe" | "requires_review";
 export type Layer = "code" | "architecture" | "system" | "security";
@@ -22,10 +22,11 @@ export type MergeStrategy =
   | "same-file"
   | "same-rule"
   | "same-tool"
-  | "same-linter";
+  | "same-linter"
+  | "same-file-tool";
 
 /** Default merge strategy - single source of truth for all configs */
-export const DEFAULT_MERGE_STRATEGY: MergeStrategy = "same-rule";
+export const DEFAULT_MERGE_STRATEGY: MergeStrategy = "same-file-tool";
 
 interface ToolConfig {
   enabled: ToolEnablement;
@@ -162,6 +163,29 @@ export interface LlmConfig {
   pr_branch_prefix: string;
 }
 
+/**
+ * Autofix command configuration for a single tool.
+ * Can override built-in commands or define new ones.
+ */
+export interface AutofixToolConfig {
+  /** Command to run (e.g., "eslint", "ruff") */
+  command: string;
+  /** Arguments before file paths (e.g., ["--fix"]) */
+  args: string[];
+  /** Use npx to run command */
+  useNpx?: boolean;
+  /** Description for PR */
+  description?: string;
+}
+
+/**
+ * Autofix configuration section.
+ * Maps tool names to autofix commands, or false to disable.
+ */
+export interface AutofixConfig {
+  [tool: string]: Partial<AutofixToolConfig> | false;
+}
+
 export interface VibeCopConfig {
   version: number;
   schedule?: ScheduleConfig;
@@ -170,6 +194,7 @@ export interface VibeCopConfig {
   issues?: IssuesConfig;
   output?: OutputConfig;
   llm?: LlmConfig;
+  autofix?: AutofixConfig;
 }
 
 /**
@@ -331,6 +356,11 @@ export interface LlmJsonSummary {
   actionable: number;
   bySeverity: Record<Severity, number>;
   byTool: Record<string, number>;
+  // Suppressed findings (below severity/confidence threshold)
+  suppressed?: {
+    bySeverity: Record<Severity, number>;
+    total: number;
+  };
   // Issue stats (populated after issue processing)
   issuesCreated?: number;
   issuesUpdated?: number;
