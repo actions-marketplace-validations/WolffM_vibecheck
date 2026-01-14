@@ -123,6 +123,30 @@ runs:
         # These tools work without config files (depcruise uses --no-config, knip auto-detects)
         npm install -g dependency-cruiser knip
 
+    - name: Install Target Repo JS Dependencies
+      shell: bash
+      run: |
+        # Install target repo's node dependencies for ESLint and TypeScript analysis
+        # This is needed for modern ESLint configs that import packages
+        cd "${{ github.workspace }}"
+        if [ -f "package.json" ]; then
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "Installing dependencies with pnpm..."
+            pnpm install --frozen-lockfile || pnpm install
+          elif [ -f "yarn.lock" ]; then
+            echo "Installing dependencies with yarn..."
+            yarn install --frozen-lockfile || yarn install
+          elif [ -f "package-lock.json" ]; then
+            echo "Installing dependencies with npm..."
+            npm ci || npm install
+          else
+            echo "Installing dependencies with npm (no lockfile)..."
+            npm install
+          fi
+        else
+          echo "No package.json found, skipping JS dependency installation"
+        fi
+
     - name: Detect Java files
       id: detect-java
       shell: bash

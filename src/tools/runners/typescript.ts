@@ -393,7 +393,14 @@ export function runEslint(rootPath: string): Finding[] {
     }
 
     let result;
-    if (hasLocalEslint) {
+    // Check if node_modules are installed (eslint exists locally)
+    const hasNodeModules = existsSync(join(rootPath, "node_modules", "eslint"));
+
+    // Modern ESLint configs (eslint.config.mjs) require local dependencies to be installed
+    // because they import packages like @eslint/js and typescript-eslint
+    const isModernConfig = configFile.endsWith(".mjs") || configFile.endsWith("eslint.config.js");
+
+    if (hasLocalEslint && hasNodeModules) {
       // Use pnpm exec for pnpm projects to properly resolve local dependencies
       const hasPnpm = existsSync(join(rootPath, "pnpm-lock.yaml"));
       if (hasPnpm) {
@@ -407,8 +414,13 @@ export function runEslint(rootPath: string): Finding[] {
         // Try npx with local eslint
         result = runTool("eslint", args, { cwd: rootPath, useNpx: true });
       }
+    } else if (isModernConfig && !hasNodeModules) {
+      // Modern configs require imports - skip if dependencies not installed
+      console.log("  Skipping: modern ESLint config requires installed dependencies");
+      console.log("  Install node_modules to enable ESLint analysis");
+      return [];
     } else {
-      // Fall back to global/npx eslint
+      // Fall back to global/npx eslint for legacy configs
       const { available, useNpx } = isToolAvailable("eslint");
       if (!available) {
         console.log("  ESLint not installed, skipping");
