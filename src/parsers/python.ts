@@ -14,7 +14,6 @@ import {
   parseResults,
 } from "../utils/parser-utils.js";
 import {
-  determineAutofixLevel,
   mapBanditConfidence,
   mapBanditSeverity,
   mapMypyConfidence,
@@ -54,11 +53,33 @@ interface RuffResult {
 }
 
 /**
+ * Determine autofix level based on ruff's applicability field.
+ * Ruff provides: "safe", "unsafe", or "display-only"
+ */
+function determineRuffAutofixLevel(result: RuffResult): "safe" | "requires_review" | "none" {
+  if (!result.fix) {
+    return "none";
+  }
+
+  // Trust ruff's own applicability assessment
+  const applicability = result.fix.applicability?.toLowerCase();
+  if (applicability === "safe") {
+    return "safe";
+  }
+  if (applicability === "unsafe") {
+    return "requires_review";
+  }
+  // display-only or unknown
+  return "none";
+}
+
+/**
  * Parse Ruff JSON output into Findings.
  */
 export function parseRuffOutput(output: RuffResult[]): Finding[] {
   return parseResults(output, (result) => {
     const hasAutofix = !!result.fix;
+    const autofix = determineRuffAutofixLevel(result);
     return createFinding({
       result,
       tool: "ruff",
@@ -73,7 +94,7 @@ export function parseRuffOutput(output: RuffResult[]): Finding[] {
         result.end_location,
       ),
       hasAutofix,
-      autofix: determineAutofixLevel("ruff", result.code, hasAutofix),
+      autofix,
     });
   });
 }
