@@ -16,7 +16,7 @@ import {
   parseMypyOutput,
   parseBanditOutput,
   type BanditOutput,
-} from "../../parsers.js";
+} from "../../parsers/index.js";
 import { MAX_OUTPUT_BUFFER } from "../../utils/shared.js";
 
 /**

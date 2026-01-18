@@ -7,7 +7,7 @@
 import { spawnSync } from "node:child_process";
 import type { Finding } from "../../core/types.js";
 import { EXCLUDE_DIRS_COMMON, isToolAvailable } from "../tool-utils.js";
-import { parseSemgrepOutput } from "../../parsers.js";
+import { parseSemgrepOutput } from "../../parsers/index.js";
 import { MAX_OUTPUT_BUFFER } from "../../utils/shared.js";
 
 /**

@@ -20,7 +20,7 @@ import {
   mapMypySeverity,
   mapRuffConfidence,
   mapRuffSeverity,
-} from "../scoring.js";
+} from "../scoring/index.js";
 import type { Finding } from "../core/types.js";
 
 // ============================================================================

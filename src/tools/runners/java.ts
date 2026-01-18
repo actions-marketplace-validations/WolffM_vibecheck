@@ -14,7 +14,7 @@ import {
   parseSpotBugsOutput,
   type PmdOutput,
   type SpotBugsSarifOutput,
-} from "../../parsers.js";
+} from "../../parsers/index.js";
 import { MAX_OUTPUT_BUFFER } from "../../utils/shared.js";
 
 /**

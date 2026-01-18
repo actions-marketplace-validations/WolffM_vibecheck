@@ -30,7 +30,7 @@ import {
   type DepcruiseOutput,
   type KnipOutput,
   type EslintOutput,
-} from "../../parsers.js";
+} from "../../parsers/index.js";
 
 // ESM equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);

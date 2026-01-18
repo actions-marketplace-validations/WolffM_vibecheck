@@ -20,7 +20,7 @@ export {
   type KnipOutput,
   type TrunkOutput,
   type EslintOutput,
-} from "./parsers/typescript.js";
+} from "./typescript.js";
 
 // Python parsers
 export {
@@ -28,7 +28,7 @@ export {
   parseMypyOutput,
   parseBanditOutput,
   type BanditOutput,
-} from "./parsers/python.js";
+} from "./python.js";
 
 // Java parsers
 export {
@@ -36,10 +36,10 @@ export {
   parseSpotBugsOutput,
   type PmdOutput,
   type SpotBugsSarifOutput,
-} from "./parsers/java.js";
+} from "./java.js";
 
 // Security parsers (cross-language)
-export { parseSemgrepOutput, type SemgrepOutput } from "./parsers/security.js";
+export { parseSemgrepOutput, type SemgrepOutput } from "./security.js";
 
 // Rust parsers
 export {
@@ -48,4 +48,4 @@ export {
   parseCargoDenyOutput,
   type CargoAuditOutput,
   type CargoDenyOutput,
-} from "./parsers/rust.js";
+} from "./rust.js";

@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Finding } from "../core/types.js";
 import { extractJsonFromMixedOutput } from "./tool-utils.js";
-import { parseTrunkOutput } from "../parsers.js";
+import { parseTrunkOutput } from "../parsers/index.js";
 import { MAX_OUTPUT_BUFFER, TOOL_INIT_TIMEOUT_MS } from "../utils/shared.js";
 
 // Re-export all language-specific runners

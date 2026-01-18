@@ -10,7 +10,7 @@
 import { writeFileSync } from "node:fs";
 import { loadFindingsAndContext } from "../utils/cli-utils.js";
 import { getSuggestedFix } from "../utils/fix-templates.js";
-import { compareFindingsForSort, meetsThresholds } from "../scoring.js";
+import { compareFindingsForSort, meetsThresholds } from "../scoring/index.js";
 import type {
   Confidence,
   Finding,

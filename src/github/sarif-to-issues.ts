@@ -26,7 +26,7 @@ import {
   generateIssueTitle,
   getLabelsForFinding,
 } from "../output/issue-formatter.js";
-import { compareFindingsForSort, meetsThresholds } from "../scoring.js";
+import { compareFindingsForSort, meetsThresholds } from "../scoring/index.js";
 import { DEFAULT_CONFIG, type ExistingIssue, type Finding, type RunContext } from "../core/types.js";
 
 // ============================================================================

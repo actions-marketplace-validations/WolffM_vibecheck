@@ -15,7 +15,7 @@ import {
   parseCargoDenyOutput,
   type CargoAuditOutput,
   type CargoDenyOutput,
-} from "../../parsers.js";
+} from "../../parsers/index.js";
 import { MAX_OUTPUT_BUFFER } from "../../utils/shared.js";
 
 /** Directories to exclude for Rust (comma-separated) */

@@ -19,7 +19,7 @@ import {
   mapCargoAuditConfidence,
   mapCargoDenySeverity,
   mapCargoDenyConfidence,
-} from "../scoring.js";
+} from "../scoring/index.js";
 import type { Finding } from "../core/types.js";
 
 // ============================================================================

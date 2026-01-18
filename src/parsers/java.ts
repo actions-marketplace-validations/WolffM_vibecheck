@@ -12,7 +12,7 @@ import {
   mapPmdSeverity,
   mapSpotBugsConfidence,
   mapSpotBugsSeverity,
-} from "../scoring.js";
+} from "../scoring/index.js";
 import type { Finding } from "../core/types.js";
 
 // ============================================================================

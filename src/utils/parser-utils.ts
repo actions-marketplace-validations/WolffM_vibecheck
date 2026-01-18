@@ -6,7 +6,7 @@
  */
 
 import { fingerprintFinding } from "./fingerprints.js";
-import { classifyLayer } from "../scoring.js";
+import { classifyLayer } from "../scoring/index.js";
 import type {
   AutofixLevel,
   Confidence,

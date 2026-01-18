@@ -25,7 +25,7 @@ import {
   mapKnipSeverity,
   mapTscConfidence,
   mapTscSeverity,
-} from "../scoring.js";
+} from "../scoring/index.js";
 import type { Finding, JscpdOutput, Location, TscDiagnostic } from "../core/types.js";
 
 // ============================================================================
