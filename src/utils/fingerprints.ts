@@ -560,9 +560,29 @@ function mergeFindings(
     const sublinter = extractSublinter(base);
     title = `${sublinter} (${allLocations.length} issues across ${uniqueRules.length} rules)`;
   } else if (strategy === "same-file-tool" && uniqueRules.length > 1) {
-    // For same-file-tool merge with multiple rules, show tool + file + rule count
     const fileName = uniqueFiles[0]?.split("/").pop() || uniqueFiles[0];
-    title = `${base.tool}: ${fileName} (${allLocations.length} issues across ${uniqueRules.length} rules)`;
+
+    // For knip, generate descriptive titles like "Unused code in index.ts (2 exports, 1 type)"
+    if (base.tool === "knip") {
+      // Count findings by type (ruleId is the type for knip)
+      const typeCounts = new Map<string, number>();
+      for (const f of findings) {
+        typeCounts.set(f.ruleId, (typeCounts.get(f.ruleId) || 0) + 1);
+      }
+
+      // Build human-readable type counts: "2 exports, 1 type"
+      const typeLabels: string[] = [];
+      for (const [type, count] of typeCounts) {
+        // Pluralize common types
+        const label = count === 1 ? type.replace(/s$/, "") : type;
+        typeLabels.push(`${count} ${label}`);
+      }
+
+      title = `Unused code in ${fileName} (${typeLabels.join(", ")})`;
+    } else {
+      // For other tools, show tool + file + rule count
+      title = `${base.tool}: ${fileName} (${allLocations.length} issues across ${uniqueRules.length} rules)`;
+    }
   } else if (allLocations.length > 1) {
     // For jscpd, don't add occurrence count - the title already shows "X lines" of duplication
     // Adding "(Y occurrences)" is redundant and confusing

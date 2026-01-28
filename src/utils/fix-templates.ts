@@ -555,14 +555,20 @@ const GENERIC_TOOL_HINTS: Partial<Record<string, (finding: Finding) => Suggested
         "Tests verify correct behavior",
       ],
     }),
-    custom: () => ({
-      goal: "Address code issue",
+    custom: (finding) => ({
+      goal: `Fix ${finding.ruleId} issue detected by ${finding.tool}`,
       steps: [
-        "Review the finding details",
-        "Apply appropriate fix",
-        "Test the changes",
+        `Locate the affected code at: ${finding.locations.map((l) => `${l.path}:${l.startLine}`).join(", ")}`,
+        `Understand the issue: ${finding.message.split("\n")[0].substring(0, 200)}`,
+        `Search for documentation on rule "${finding.ruleId}" to understand the security concern`,
+        "Apply the recommended fix pattern from the rule documentation",
+        "Verify the fix doesn't introduce regressions by running tests",
       ],
-      acceptance: ["Issue is resolved", "Tests pass"],
+      acceptance: [
+        `${finding.tool} no longer reports ${finding.ruleId} at the specified location(s)`,
+        "All existing tests pass",
+        "Security concern is properly addressed",
+      ],
     }),
   };
 

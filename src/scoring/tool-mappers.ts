@@ -182,17 +182,38 @@ export function mapDepcruiseConfidence(violationType: string): Confidence {
 
 /**
  * Map knip (unused code) findings to severity.
+ *
+ * Severity Rationale:
+ *
+ * - **dependencies/devDependencies → high**: Unused dependencies add bloat,
+ *   increase attack surface (security risk), slow installs, and may have
+ *   license implications. These are actionable and should be removed.
+ *
+ * - **exports/types → medium**: Unused exports indicate dead code that:
+ *   1. Confuses developers and AI agents about available APIs
+ *   2. Can lead to agents building duplicate functionality (not seeing the
+ *      unused code is intentionally available)
+ *   3. Increases bundle size in some build configurations
+ *   4. Makes refactoring harder (unclear what is actually used)
+ *   Medium severity ensures these are surfaced without overwhelming with noise.
+ *
+ * - **files → medium**: Unused files are similar to unused exports - dead code
+ *   that should be cleaned up but isn't immediately dangerous.
+ *
+ * Note: Some may argue these should be "low" severity. We chose "medium" because
+ * unused code is particularly problematic in agentic coding environments where
+ * AI assistants may not discover unused structures and build duplicates.
  */
 export function mapKnipSeverity(issueType: string): Severity {
   // Unused dependencies are high (bloat, security)
   if (issueType === "dependencies" || issueType === "devDependencies") {
     return "high";
   }
-  // Unused exports are medium
+  // Unused exports are medium (dead code, confusing for agents)
   if (issueType === "exports" || issueType === "types") {
     return "medium";
   }
-  // Unused files are medium-high
+  // Unused files are medium
   if (issueType === "files") {
     return "medium";
   }
