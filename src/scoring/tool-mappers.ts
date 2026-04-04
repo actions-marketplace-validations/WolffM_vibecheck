@@ -386,10 +386,14 @@ export function mapMypySeverity(errorCode: string): Severity {
 
 /**
  * Map Mypy findings to confidence.
- * Type checker findings are typically high confidence.
+ * Import-related errors are downgraded because they are unreliable
+ * without the project's virtualenv (missing third-party packages).
+ * Other type errors from mypy are high confidence.
  */
-export function mapMypyConfidence(_errorCode: string): Confidence {
-  // Mypy findings are definitive type errors
+export function mapMypyConfidence(errorCode: string): Confidence {
+  if (errorCode.includes("import")) {
+    return "low";
+  }
   return "high";
 }
 
@@ -424,6 +428,30 @@ export function mapBanditConfidence(banditConfidence: string): Confidence {
   if (normalized === "MEDIUM") {
     return "medium";
   }
+  return "low";
+}
+
+// ============================================================================
+// Vulture Mappings (Python Dead Code)
+// ============================================================================
+
+/**
+ * Map Vulture finding type to severity.
+ * Unused imports and unreachable code are higher severity than unused variables.
+ */
+export function mapVultureSeverity(code: string): Severity {
+  if (code === "unused-import") return "high";
+  if (code === "unreachable-code") return "high";
+  if (code === "unused-class" || code === "unused-function") return "medium";
+  return "low"; // unused-variable, unused-attribute, unused-property
+}
+
+/**
+ * Map Vulture confidence percentage (60-100) to our confidence scale.
+ */
+export function mapVultureConfidence(confidencePct: number): Confidence {
+  if (confidencePct >= 90) return "high";
+  if (confidencePct >= 70) return "medium";
   return "low";
 }
 

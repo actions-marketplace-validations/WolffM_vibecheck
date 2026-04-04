@@ -16,7 +16,8 @@ import {
   writeLlmJsonFile,
   type FindingStats,
 } from "../output/build-llm-json.js";
-import { processFindings } from "../github/sarif-to-issues.js";
+import { processFindings as processGitHubFindings } from "../github/sarif-to-issues.js";
+import { processFindings as processAdoFindings } from "../ado/findings-to-workitems.js";
 import {
   deduplicateFindings,
   mergeIssues,
@@ -51,6 +52,7 @@ export interface AnalyzeOptions {
   cadence?: Cadence;
   outputDir?: string;
   skipIssues?: boolean;
+  target?: "github" | "ado";
   severityThreshold?: Severity | "info";
   confidenceThreshold?: Confidence;
 }
@@ -122,7 +124,7 @@ export async function analyze(
   // Step 3: Run analysis tools using registry
   console.log("Step 3: Running analysis tools...");
   const toolsToRun = getToolsToRun(profile, cadence, config);
-  const allFindings = executeTools(toolsToRun, rootPath, config);
+  const { findings: allFindings, toolResults } = executeTools(toolsToRun, rootPath, config);
 
   // Step 4: Deduplicate findings
   console.log("Step 4: Deduplicating findings...");
@@ -194,6 +196,7 @@ export async function analyze(
       totalFindings: allFindings.length,
       uniqueFindings: uniqueFindings.length,
       mergedFindings: mergedFindings.length,
+      toolResults,
     };
     const llmJson = buildLlmJson(mergedFindings, context, findingStats);
     const llmJsonPath = join(outputDir, "results.llm.json");
@@ -203,15 +206,33 @@ export async function analyze(
 
   console.log("");
 
-  // Step 6: Create/update issues (use merged findings)
+  // Step 6: Create/update issues or work items
   let issueStats = { created: 0, updated: 0, closed: 0 };
-  if (
+  const target = options.target || "github";
+
+  if (target === "ado" && !options.skipIssues) {
+    // ADO work item creation
+    if ((process.env.ADO_ORG && process.env.ADO_PROJECT && (process.env.ADO_PAT || process.env.ADO_TOKEN))) {
+      console.log("Step 6: Processing ADO work items...");
+      const stats = await processAdoFindings(mergedFindings, context);
+      issueStats = {
+        created: stats.created,
+        updated: stats.updated,
+        closed: stats.closed,
+      };
+      console.log(`  Created: ${issueStats.created}`);
+      console.log(`  Updated: ${issueStats.updated}`);
+      console.log(`  Closed: ${issueStats.closed}`);
+    } else {
+      console.log("Step 6: Skipping ADO work items (ADO_ORG, ADO_PROJECT, and ADO_PAT/ADO_TOKEN required)");
+    }
+  } else if (
     !options.skipIssues &&
     config.issues?.enabled !== false &&
     process.env.GITHUB_TOKEN
   ) {
     console.log("Step 6: Processing GitHub issues...");
-    const stats = await processFindings(mergedFindings, context);
+    const stats = await processGitHubFindings(mergedFindings, context);
     issueStats = {
       created: stats.created,
       updated: stats.updated,
@@ -282,6 +303,13 @@ async function main() {
       options.outputDir = args[++i];
     } else if (arg === "--skip-issues") {
       options.skipIssues = true;
+    } else if (arg === "--target" && args[i + 1]) {
+      const t = args[++i];
+      if (t !== "github" && t !== "ado") {
+        console.error(`Error: Invalid target "${t}". Must be "github" or "ado"`);
+        process.exit(1);
+      }
+      options.target = t;
     } else if (arg === "--severity" && args[i + 1]) {
       try {
         options.severityThreshold = parseSeverityThreshold(args[++i]);
@@ -305,7 +333,8 @@ Options:
   --cadence <cadence>    Analysis cadence: daily, weekly, monthly (default: weekly)
   --config <path>        Path to vibecheck config file (default: vibecheck.yml)
   --output <path>        Output directory (default: .vibecheck-output)
-  --skip-issues          Skip GitHub issue creation
+  --skip-issues          Skip issue/work item creation
+  --target <target>      Target platform: github (default) or ado
   --severity <level>     Severity threshold: info, low, medium, high, critical
   --confidence <level>   Confidence threshold: low, medium, high
   --help, -h             Show this help message

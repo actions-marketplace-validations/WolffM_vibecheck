@@ -1,10 +1,12 @@
 /**
  * Python Tool Runners
  *
- * Runners for Python analysis tools: Ruff, Mypy, Bandit
+ * Runners for Python analysis tools: Ruff, Mypy, Bandit, Vulture
  */
 
 import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Finding } from "../../core/types.js";
 import {
   EXCLUDE_DIRS_PYTHON,
@@ -15,6 +17,7 @@ import {
   parseRuffOutput,
   parseMypyOutput,
   parseBanditOutput,
+  parseVultureOutput,
   type BanditOutput,
 } from "../../parsers/index.js";
 import { MAX_OUTPUT_BUFFER } from "../../utils/shared.js";
@@ -56,7 +59,7 @@ export function runRuff(rootPath: string, configPath?: string): Finding[] {
     if (output.trim().startsWith("[")) {
       try {
         const parsed = JSON.parse(output);
-        return parseRuffOutput(parsed);
+        return parseRuffOutput(parsed, rootPath);
       } catch {
         console.warn("Failed to parse ruff JSON output");
       }
@@ -66,6 +69,37 @@ export function runRuff(rootPath: string, configPath?: string): Finding[] {
   }
 
   return [];
+}
+
+/**
+ * Check if the target project has its own mypy configuration.
+ * When a project config exists, we respect their import settings.
+ */
+function hasProjectMypyConfig(rootPath: string): boolean {
+  if (existsSync(join(rootPath, "mypy.ini"))) return true;
+  if (existsSync(join(rootPath, ".mypy.ini"))) return true;
+
+  const pyprojectPath = join(rootPath, "pyproject.toml");
+  if (existsSync(pyprojectPath)) {
+    try {
+      const content = readFileSync(pyprojectPath, "utf-8");
+      if (content.includes("[tool.mypy]")) return true;
+    } catch {
+      // ignore
+    }
+  }
+
+  const setupCfgPath = join(rootPath, "setup.cfg");
+  if (existsSync(setupCfgPath)) {
+    try {
+      const content = readFileSync(setupCfgPath, "utf-8");
+      if (content.includes("[mypy]")) return true;
+    } catch {
+      // ignore
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -83,6 +117,15 @@ export function runMypy(rootPath: string, configPath?: string): Finding[] {
 
     // Use --output=json for native JSON output (Python 3.10+)
     const args = ["--output", "json", "--exclude", EXCLUDE_DIRS_PYTHON];
+
+    // When no project-level mypy config exists, add --ignore-missing-imports
+    // to prevent false positives from unresolved third-party imports.
+    // This also prevents cascading attr-defined, arg-type, return-value errors.
+    if (!configPath && !hasProjectMypyConfig(rootPath)) {
+      args.push("--ignore-missing-imports");
+      console.log("  No mypy config found, adding --ignore-missing-imports");
+    }
+
     if (configPath) {
       args.push("--config-file", configPath);
     }
@@ -119,7 +162,7 @@ export function runMypy(rootPath: string, configPath?: string): Finding[] {
     }
 
     if (errors.length > 0) {
-      return parseMypyOutput(errors);
+      return parseMypyOutput(errors, rootPath);
     }
   } catch (error) {
     console.warn("mypy failed:", error);
@@ -157,10 +200,55 @@ export function runBandit(rootPath: string, configPath?: string): Finding[] {
     const output = result.stdout || "";
     const parsed = safeParseJson<BanditOutput>(output);
     if (parsed) {
-      return parseBanditOutput(parsed);
+      return parseBanditOutput(parsed, rootPath);
     }
   } catch (error) {
     console.warn("bandit failed:", error);
+  }
+
+  return [];
+}
+
+/**
+ * Run Vulture dead code detector for Python code.
+ */
+export function runVulture(rootPath: string, configPath?: string): Finding[] {
+  console.log("Running vulture...");
+
+  try {
+    const { available } = isToolAvailable("vulture", false);
+    if (!available) {
+      console.log("  Vulture not installed, skipping");
+      return [];
+    }
+
+    const args = ["."];
+    if (configPath) {
+      args.push("--config", configPath);
+    } else {
+      args.push("--min-confidence", "60");
+    }
+    args.push("--exclude", EXCLUDE_DIRS_PYTHON);
+
+    const result = spawnSync("vulture", args, {
+      cwd: rootPath,
+      encoding: "utf-8",
+      shell: true,
+      maxBuffer: MAX_OUTPUT_BUFFER,
+    });
+
+    // Vulture exits 1 when findings exist (not an error), 3 for syntax errors
+    if (result.status !== null && result.status > 1 && result.status !== 3) {
+      console.warn("  Vulture exited with unexpected code:", result.status);
+      return [];
+    }
+
+    const output = result.stdout || "";
+    if (output.trim()) {
+      return parseVultureOutput(output, rootPath);
+    }
+  } catch (error) {
+    console.warn("vulture failed:", error);
   }
 
   return [];

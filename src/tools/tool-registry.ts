@@ -12,6 +12,7 @@ import type {
   Finding,
   RepoProfile,
   ToolName,
+  ToolResult,
   VibeCopConfig,
 } from "../core/types.js";
 import { shouldRunTool } from "../core/config-loader.js";
@@ -29,6 +30,7 @@ import {
   runBandit,
   runPmd,
   runSpotBugs,
+  runVulture,
   runClippy,
   runCargoAudit,
   runCargoDeny,
@@ -37,6 +39,11 @@ import {
 // ============================================================================
 // Types
 // ============================================================================
+
+export interface ToolExecutionResult {
+  findings: Finding[];
+  toolResults: ToolResult[];
+}
 
 export interface ToolDefinition {
   /** Tool identifier */
@@ -163,6 +170,14 @@ const TOOL_REGISTRY: ToolDefinition[] = [
     detector: (p) => p.languages.includes("python"),
     run: (rootPath, config) => runBandit(rootPath, config),
     configKey: "bandit",
+  },
+  {
+    name: "vulture",
+    displayName: "Vulture (Python Dead Code)",
+    defaultCadence: "weekly",
+    detector: (p) => p.languages.includes("python"),
+    run: (rootPath, config) => runVulture(rootPath, config),
+    configKey: "vulture",
   },
 
   // Java tools
@@ -337,9 +352,9 @@ export function executeTools(
   tools: ToolDefinition[],
   rootPath: string,
   config: VibeCopConfig,
-): Finding[] {
+): ToolExecutionResult {
   const allFindings: Finding[] = [];
-  const toolResults: { name: string; count: number; status: "success" | "failed" }[] = [];
+  const toolResults: ToolResult[] = [];
 
   console.log("\n=== Running Analysis Tools ===\n");
 
@@ -355,11 +370,20 @@ export function executeTools(
     
     try {
       const findings = tool.run(rootPath, configPath);
+      
       allFindings.push(...findings);
-      toolResults.push({ name: tool.displayName, count: findings.length, status: "success" });
+      toolResults.push({ 
+        name: tool.displayName, 
+        findingsCount: findings.length, 
+        status: "success" 
+      });
       console.log(`✅ Found ${findings.length} findings`);
     } catch (error) {
-      toolResults.push({ name: tool.displayName, count: 0, status: "failed" });
+      toolResults.push({ 
+        name: tool.displayName, 
+        findingsCount: 0, 
+        status: "failed" 
+      });
       console.warn(`❌ Failed: ${error}`);
     }
     
@@ -369,9 +393,26 @@ export function executeTools(
   // Print summary table
   console.log("\n=== Tool Summary ===\n");
   for (const result of toolResults) {
-    const icon = result.status === "success" ? "✓" : "✗";
-    const countStr = result.status === "success" ? `${result.count} findings` : "failed";
-    console.log(`  ${icon} ${result.name}: ${countStr}`);
+    // Determine icon based on status
+    let icon: string;
+    if (result.status === "success") {
+      icon = "✓";
+    } else if (result.status === "skipped") {
+      icon = "⊘";
+    } else {
+      icon = "✗";
+    }
+    
+    // Build status string
+    let statusStr = "";
+    if (result.status === "success") {
+      statusStr = `${result.findingsCount} findings`;
+    } else if (result.status === "skipped") {
+      statusStr = `skipped${result.skipReason ? ` (${result.skipReason})` : ""}`;
+    } else {
+      statusStr = "failed";
+    }
+    console.log(`  ${icon} ${result.name}: ${statusStr}`);
   }
 
   // Filter out findings from excluded directories (e.g., .trunk, node_modules)
@@ -405,5 +446,9 @@ export function executeTools(
   }
 
   console.log(`\nTotal raw findings: ${filteredFindings.length}\n`);
-  return filteredFindings;
+  
+  return {
+    findings: filteredFindings,
+    toolResults,
+  };
 }
