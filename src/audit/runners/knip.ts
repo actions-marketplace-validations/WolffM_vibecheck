@@ -13,6 +13,7 @@
 
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { describeRunFailure } from "./run-failure.js";
 
 export interface DeadExport {
   name: string;
@@ -52,7 +53,10 @@ function runKnipAt(rootPath: string, root: string): KnipJson | null {
   const stdout = run.stdout ?? "";
   const jsonStart = stdout.indexOf("{");
   if (run.error || jsonStart === -1) {
-    if (run.stderr) console.warn(`knip failed at ${root}: ${run.stderr.slice(0, 200)}`);
+    // Not `if (run.stderr)`: knip reports on stdout, so that guard meant a real
+    // failure produced no warning at all and this root silently contributed no
+    // findings — which reads exactly like a clean root.
+    console.warn(`knip failed at ${root}: ${describeRunFailure(run)}`);
     return null;
   }
   try {

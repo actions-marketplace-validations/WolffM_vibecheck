@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { describeRunFailure } from "./run-failure.js";
 
 /**
  * type-coverage from THIS package's dependencies — never the npx cache.
@@ -84,19 +85,7 @@ export function runTypeCoverage(
     if (run.error || !summary) {
       // Never fail silently — the disclosure says "unavailable" and the
       // log must say why (round-8: CI degradation was undiagnosable).
-      const tail = (text: string | null | undefined) =>
-        (text ?? "").trim().split("\n").slice(-2).join(" | ");
-      console.warn(
-        `type-coverage failed at ${root}: ` +
-          [
-            run.error?.message,
-            `status ${run.status}`,
-            tail(run.stderr) && `stderr: ${tail(run.stderr)}`,
-            tail(stdout) && `stdout: ${tail(stdout)}`,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-      );
+      console.warn(`type-coverage failed at ${root}: ${describeRunFailure(run)}`);
       continue;
     }
     anyAvailable = true;

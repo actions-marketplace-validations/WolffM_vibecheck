@@ -7,6 +7,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { describeRunFailure } from "./run-failure.js";
 
 /** Version the action installs; local runs accept any scc >= 3. */
 export const SCC_PINNED_VERSION = "3.7.0";
@@ -61,7 +62,9 @@ export function runScc(rootPath: string): SccResult {
     },
   );
   if (run.error || run.status !== 0 || !run.stdout) {
-    console.warn(`scc run failed: ${run.stderr?.trim() || run.error?.message}`);
+    // Was `stderr || error?.message`, which rendered the literal "undefined"
+    // whenever scc failed with its complaint on stdout.
+    console.warn(`scc run failed: ${describeRunFailure(run)}`);
     return { available: false, version, files: [] };
   }
 

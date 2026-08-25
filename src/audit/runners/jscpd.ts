@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { describeRunFailure } from "./run-failure.js";
 
 export interface ClonePair {
   fileA: string;
@@ -75,9 +76,10 @@ export function runJscpd(rootPath: string, minLines: number): JscpdResult {
 
     const reportPath = join(outputDir, "jscpd-report.json");
     if (!existsSync(reportPath)) {
-      if (run.stderr) {
-        console.warn(`jscpd produced no report: ${run.stderr.slice(0, 200)}`);
-      }
+      // Unconditional: the `if (run.stderr)` guard swallowed every failure that
+      // spoke on stdout, and every spawn error (npx missing), leaving "no
+      // clones found" as the only visible outcome.
+      console.warn(`jscpd produced no report: ${describeRunFailure(run)}`);
       return { available: false, clones: [] };
     }
 

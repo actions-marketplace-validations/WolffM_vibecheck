@@ -11,6 +11,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { describeRunFailure } from "./run-failure.js";
 
 const COUNTER_SCRIPT = `
 import ast, json, sys
@@ -59,7 +60,12 @@ export function countDocstringLines(
     maxBuffer: 64 * 1024 * 1024,
     timeout: 5 * 60 * 1000,
   });
-  if (run.error || run.status !== 0 || !run.stdout) return null;
+  if (run.error || run.status !== 0 || !run.stdout) {
+    // Previously a bare `return null` — the one runner that failed with no
+    // signal whatsoever.
+    console.warn(`py-docstrings failed: ${describeRunFailure(run)}`);
+    return null;
+  }
   try {
     const parsed = JSON.parse(run.stdout) as Record<string, number>;
     return new Map(Object.entries(parsed));

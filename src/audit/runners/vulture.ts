@@ -7,6 +7,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { describeRunFailure } from "./run-failure.js";
 
 export interface VultureItem {
   path: string;
@@ -63,8 +64,11 @@ export function runVulture(rootPath: string): VultureResult {
     },
   );
   // vulture exits 3 when it finds dead code — that is success with data.
-  if (run.error) {
-    console.warn(`vulture failed: ${run.error.message}`);
+  // `run.error` alone only catches a failure to SPAWN; vulture exiting non-zero
+  // for a reason other than "found dead code" (exit 3) fell straight through
+  // into the parse loop and reported zero items.
+  if (run.error || (run.status !== 0 && run.status !== 3)) {
+    console.warn(`vulture failed: ${describeRunFailure(run)}`);
     return { available: false, items: [] };
   }
 
