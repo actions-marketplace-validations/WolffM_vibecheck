@@ -17,6 +17,19 @@ import { selectPackagedFindings, siblingPrecedents } from "./findings.js";
 import type { AuditRunResult } from "./index.js";
 import type { FileScore } from "./scoring.js";
 
+/**
+ * Findings the operator has not seen since their last acknowledgment.
+ * Everything else was in a batch they already closed — it still fires,
+ * but it must not be presented as fresh work (field round 2: a batch
+ * announcing "25 new" packaged 45, most of them already triaged).
+ */
+function isNewSinceAck(result: AuditRunResult, score: FileScore): boolean {
+  const fresh = new Set(result.ledger.newSinceAcknowledged);
+  return score.firingLanes.some((f) =>
+    fresh.has(`${f.lane}:${score.path}`),
+  );
+}
+
 function precedentNote(
   result: AuditRunResult,
   path: string,
@@ -209,7 +222,27 @@ export function renderAgentBriefing(result: AuditRunResult): string {
       "Each has a full evidence package in `.vibecompact/findings/`.",
       "",
     );
-    for (const single of singles) {
+    const freshSingles = singles.filter((x) => isNewSinceAck(result, x));
+    const seenSingles = singles.filter((x) => !isNewSinceAck(result, x));
+    if (freshSingles.length > 0 && seenSingles.length > 0) {
+      lines.push(
+        `**New since your last acknowledged batch: ${freshSingles.length}.** ` +
+          `${seenSingles.length} more are still firing from batches you already closed, listed after them.`,
+        "",
+      );
+    }
+    for (const [index, single] of [...freshSingles, ...seenSingles].entries()) {
+      if (
+        seenSingles.length > 0 &&
+        index === freshSingles.length &&
+        freshSingles.length > 0
+      ) {
+        lines.push(
+          "",
+          "<details><summary>Still firing from earlier batches (already seen — no action implied)</summary>",
+          "",
+        );
+      }
       const lane = single.firingLanes[0]?.lane ?? "?";
       const dead = result.lanes.deadcode?.entries.find(
         (e) => e.path === single.path,
@@ -240,6 +273,9 @@ export function renderAgentBriefing(result: AuditRunResult): string {
       lines.push(
         `- \`${single.path}\` — ${lane}${detail ? `: ${detail}` : ""}${precedentNote(result, single.path, [lane])} → \`.vibecompact/findings/${findingSlug(single.path)}.md\``,
       );
+    }
+    if (seenSingles.length > 0 && freshSingles.length > 0) {
+      lines.push("", "</details>");
     }
     const dropped = [...droppedByLane.entries()].sort();
     if (dropped.length > 0) {

@@ -352,6 +352,32 @@ describe("agent briefing", () => {
     );
   });
 
+  it("separates new findings from ones the operator already acknowledged", () => {
+    const result = fixtureResult();
+    result.worstOffenders = [];
+    result.bestFirstTargets = [];
+    result.fileScores = ["fresh.ts", "seen.ts"].map((name) => ({
+      path: `src/${name}`,
+      applicableLanes: ["size"],
+      firingLanes: [{ lane: "size", score: 1.5, threshold: 1 }],
+      suppressedByFloor: [],
+      weightedScore: 1.5,
+      gatePassed: false,
+    }));
+    result.ledger.newSinceAcknowledged = ["size:src/fresh.ts"];
+    const briefing = renderAgentBriefing(result);
+    expect(briefing).toContain("**New since your last acknowledged batch: 1.**");
+    expect(briefing).toContain("1 more are still firing from batches you already closed");
+    expect(briefing).toContain("Still firing from earlier batches");
+    // The new one is listed before the collapsed section opens.
+    expect(briefing.indexOf("src/fresh.ts")).toBeLessThan(
+      briefing.indexOf("<details>"),
+    );
+    expect(briefing.indexOf("<details>")).toBeLessThan(
+      briefing.indexOf("src/seen.ts"),
+    );
+  });
+
   it("discloses per-lane caps instead of dropping firings silently", () => {
     const result = fixtureResult();
     result.config = { ...result.config, maxReportItems: 2 };

@@ -241,6 +241,15 @@ describe("episodic findings PR", () => {
     ).toContain("do-not-merge");
   });
 
+  it("refreshes the stale title along with the body", async () => {
+    // Bodies are rewritten in place every run; a title left alone
+    // advertises a date and anchor the PR no longer contains.
+    const open = fakeClient([], [{ number: 9 }]);
+    await refreshOpenDataPr(open.client, "o", "r", "B.", batch);
+    const call = open.calls.updatePull[0] as { title?: string; body: string };
+    expect(call.title).toBe("vibeCompact findings — 2026-08-17 (anchor 0123456789ab)");
+  });
+
   it("refreshes an open PR and reports null when none is open", async () => {
     const none = fakeClient([]);
     expect(await refreshOpenDataPr(none.client, "o", "r", "B.", batch)).toBeNull();

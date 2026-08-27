@@ -40,6 +40,15 @@ export const JUSTIFIED_MAX_AGE_DAYS = 180;
 /** Default growth invalidation for justified verdicts (percent). */
 export const JUSTIFIED_GROWTH_PCT = 20;
 
+/**
+ * Lanes where a file growing past the growth threshold genuinely
+ * invalidates the reasoning behind a `justified` verdict. Size is the
+ * premise for these; for every other lane the reasoning is structural
+ * (unreachable by import, covered cross-language, registered by
+ * decorator) and line count cannot falsify it.
+ */
+export const GROWTH_SENSITIVE_LANES = new Set(["size", "duplication"]);
+
 export const LEDGER_PATH = ".vibecompact/ledger.jsonl";
 
 // ============================================================================
@@ -98,7 +107,35 @@ export function makeUlid(time: number = Date.now()): string {
 // Event types
 // ============================================================================
 
-export type HumanVerdict = "justified" | "wontfix" | "noise";
+/**
+ * Operator decisions.
+ *  - justified / wontfix: repo decisions about real findings.
+ *  - noise: the finding is wrong FOR THIS FILE; ratchets the lane floor.
+ *  - detector-gap: the finding is mechanically invalid — the detector
+ *    cannot see how this code is reached/covered. Suppresses like noise
+ *    but NEVER ratchets: a detector defect must not desensitise a lane
+ *    for the repo that reported it. Field round 2 found three teams
+ *    declining to file `noise` for exactly this reason and writing
+ *    GitHub issues instead, which made our own false-positive rate
+ *    unmeasurable.
+ */
+export type HumanVerdict =
+  | "justified"
+  | "wontfix"
+  | "noise"
+  | "detector-gap";
+
+/** What the detector could not see. Free-form values are accepted; these
+ * are the classes field round 2 actually produced. */
+export type DetectorMechanism =
+  | "cross-language-coverage"
+  | "decorator-registration"
+  | "module-resolution"
+  | "template-mount"
+  | "convention-loading"
+  | "published-surface"
+  | "measurement"
+  | "other";
 
 export interface VerdictEvent {
   id: string;
@@ -107,6 +144,8 @@ export interface VerdictEvent {
   verdict: HumanVerdict;
   fingerprint: string;
   reason: string;
+  /** detector-gap only: which detector mechanism failed. */
+  mechanism?: DetectorMechanism;
   baseline?: { codeLines?: number; sha?: string };
   invalidateWhen?: { growthPct?: number; maxAgeDays?: number };
 }
@@ -182,6 +221,96 @@ export function pathOf(fingerprint: string): string {
 
 export function makeFingerprint(lane: string, path: string): string {
   return `${lane}:${path}`;
+}
+
+/**
+ * Fingerprints may be concrete (`size:src/a.ts`) or a PATTERN:
+ *   `arrival:frontend/<globstar>/*.tsx` - one decision for a file class
+ *   (a real pattern uses two asterisks; spelled out here so this
+ *   comment does not terminate early)
+ *   `*:themes/dev/editor.js`     — file-level accept, every lane
+ * Patterns exist because operators were re-answering the same question
+ * per file (dataplatform filed 18 verbatim-identical arrival
+ * justifications) and because a `wontfix` on one lane left the same
+ * frozen file firing on another (pygmalion's BakeoffReview.tsx).
+ */
+export function isPatternFingerprint(fingerprint: string): boolean {
+  return (
+    laneOf(fingerprint) === "*" || /[*?[\]]/.test(pathOf(fingerprint))
+  );
+}
+
+/** Glob → RegExp. `**` crosses directories, `*` and `?` do not. */
+export function globToRegExp(glob: string): RegExp {
+  let out = "";
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === "*") {
+      if (glob[i + 1] === "*") {
+        // `**/` (or a trailing `**`) spans any number of segments.
+        if (glob[i + 2] === "/") {
+          out += "(?:.*/)?";
+          i += 2;
+        } else {
+          out += ".*";
+          i += 1;
+        }
+      } else {
+        out += "[^/]*";
+      }
+    } else if (c === "?") {
+      out += "[^/]";
+    } else {
+      out += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${out}$`);
+}
+
+/** Does a (possibly pattern) verdict fingerprint govern a concrete one? */
+export function fingerprintMatches(
+  pattern: string,
+  concrete: string,
+): boolean {
+  const pLane = laneOf(pattern);
+  if (pLane !== "*" && pLane !== laneOf(concrete)) return false;
+  const pPath = pathOf(pattern);
+  const cPath = pathOf(concrete);
+  if (pPath === cPath) return true;
+  if (!/[*?[\]]/.test(pPath)) return false;
+  return globToRegExp(pPath).test(cPath);
+}
+
+/**
+ * The verdict governing a concrete fingerprint. Exact match wins; among
+ * patterns the most specific (longest non-wildcard prefix, then a named
+ * lane over `*`) wins, and the latest filed breaks a tie.
+ */
+export function findGoverningVerdict(
+  fold: LedgerFold,
+  fingerprint: string,
+): VerdictEvent | undefined {
+  const exact = fold.verdicts.get(fingerprint);
+  if (exact) return exact;
+  let best: VerdictEvent | undefined;
+  let bestScore = -1;
+  for (const [fp, event] of fold.verdicts) {
+    if (!isPatternFingerprint(fp)) continue;
+    if (!fingerprintMatches(fp, fingerprint)) continue;
+    const path = pathOf(fp);
+    const wildcardAt = path.search(/[*?[]/);
+    const specificity =
+      (wildcardAt === -1 ? path.length : wildcardAt) * 2 +
+      (laneOf(fp) === "*" ? 0 : 1);
+    if (
+      specificity > bestScore ||
+      (specificity === bestScore && best && event.at > best.at)
+    ) {
+      best = event;
+      bestScore = specificity;
+    }
+  }
+  return best;
 }
 
 // ============================================================================
@@ -270,6 +399,8 @@ export interface LedgerFold {
   floorSteps: Map<string, number>;
   /** Latest batch acknowledgment (findings-PR closure), if any. */
   lastAcknowledged: AcknowledgedEvent | null;
+  /** Standing detector-gap claims — the fleet's false-positive record. */
+  detectorGaps: VerdictEvent[];
   /** Rename chain resolution old → final path. */
   resolvePath: (path: string) => string;
 }
@@ -367,6 +498,9 @@ export function foldLedger(rawEvents: LedgerEvent[]): LedgerFold {
     noiseByLane,
     floorSteps,
     lastAcknowledged,
+    detectorGaps: [...verdicts.values()].filter(
+      (v) => v.verdict === "detector-gap",
+    ),
     resolvePath,
   };
 }
@@ -404,7 +538,8 @@ export type VerdictStatus =
   | "justified-aging"
   | "reopened-growth"
   | "wontfix"
-  | "noise";
+  | "noise"
+  | "detector-gap";
 
 export interface ResolvedVerdict {
   fingerprint: string;
@@ -426,7 +561,7 @@ export function resolveVerdict(
   fingerprint: string,
   ctx: VerdictContext,
 ): ResolvedVerdict {
-  const event = fold.verdicts.get(fingerprint);
+  const event = findGoverningVerdict(fold, fingerprint);
   if (!event) return { fingerprint, status: "none", suppressed: false };
 
   if (event.verdict === "wontfix") {
@@ -435,12 +570,22 @@ export function resolveVerdict(
   if (event.verdict === "noise") {
     return { fingerprint, status: "noise", suppressed: true, event };
   }
+  if (event.verdict === "detector-gap") {
+    return { fingerprint, status: "detector-gap", suppressed: true, event };
+  }
 
   // justified: growth invalidation is a hard re-open; age is refresh-and-quote.
+  // Growth only invalidates lanes whose premise IS size — a config file
+  // that doubled is still unreachable by any test import, and a React
+  // component that grew is still covered by the same cross-language e2e
+  // suite. Field round 2: 51 structural verdicts across four repos were
+  // armed to re-open on line count alone, and dataplatform's
+  // arrival:eslint.config.js actually did.
   const growthPct = event.invalidateWhen?.growthPct ?? JUSTIFIED_GROWTH_PCT;
   const baseline = event.baseline?.codeLines;
   const current = ctx.codeLines?.get(pathOf(fingerprint));
   if (
+    GROWTH_SENSITIVE_LANES.has(laneOf(fingerprint)) &&
     baseline !== undefined &&
     current !== undefined &&
     current > baseline * (1 + growthPct / 100)

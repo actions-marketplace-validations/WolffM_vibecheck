@@ -124,6 +124,13 @@ export interface AuditRunResult {
     /** Still-firing fingerprints whose score dropped ≥10% since they
      * first fired — "improved, still flagged" (partial-fix framing). */
     improving: Record<string, number>;
+    /**
+     * Fingerprints firing for the first time since the operator last
+     * acknowledged a batch. The findings PR leads with these; everything
+     * else is "previously seen" and gets collapsed, so closing a batch
+     * actually retires it instead of handing it back next run.
+     */
+    newSinceAcknowledged: string[];
   };
   /** Lanes muted this run by repo saturation (lane → firing rate). */
   saturatedLanes: Record<string, number>;
@@ -402,6 +409,21 @@ export async function runAudit(
   );
   if (stampLedger && runEvents.length > 0) appendEvents(rootPath, runEvents);
 
+  // What is new since the operator last closed a batch: firings stamped
+  // by this run, plus standing firings that post-date the acknowledgment.
+  const ackAt = fold.lastAcknowledged?.at ?? "";
+  const newSinceAcknowledged = new Set<string>();
+  for (const event of runEvents) {
+    if ("kind" in event && event.kind === "firing") {
+      newSinceAcknowledged.add(event.fingerprint);
+    }
+  }
+  for (const [fingerprint, state] of fold.firing) {
+    if (state.fixedAt || saturatedLanes.has(laneOf(fingerprint))) continue;
+    if (!currentScores.has(fingerprint)) continue;
+    if (state.firedAt > ackAt) newSinceAcknowledged.add(fingerprint);
+  }
+
   // Partial-fix acknowledgment: still firing, but meaningfully down from
   // the score it originally fired at ("improved, still flagged").
   const improving: Record<string, number> = {};
@@ -474,6 +496,7 @@ export async function runAudit(
       reopened,
       stampedEvents: renameEvents.length + runEvents.length,
       improving,
+      newSinceAcknowledged: [...newSinceAcknowledged].sort(),
     },
     saturatedLanes: Object.fromEntries(saturated),
     coverageGaps,

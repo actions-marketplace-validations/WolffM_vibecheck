@@ -100,6 +100,7 @@ export interface IssueClient {
     repo: string;
     pull_number: number;
     body: string;
+    title?: string;
   }): Promise<void>;
 }
 
@@ -291,6 +292,13 @@ export interface BatchInfo {
   sincePr: number | null;
 }
 
+export function batchTitle(batch: BatchInfo): string {
+  return (
+    `vibeCompact findings — ${batch.date}` +
+    (batch.anchor ? ` (anchor ${batch.anchor.slice(0, 12)})` : "")
+  );
+}
+
 function batchBody(briefing: string, batch: BatchInfo): string {
   const header =
     `**Findings batch — ${batch.date}` +
@@ -334,11 +342,14 @@ export async function refreshOpenDataPr(
     state: "open",
   });
   if (existing.length === 0) return null;
+  // Refresh the title too: the body is rewritten in place every run, so
+  // a stale title advertises a date and anchor the PR no longer contains.
   await client.updatePull({
     owner,
     repo,
     pull_number: existing[0].number,
     body: batchBody(briefing, batch),
+    title: batchTitle(batch),
   });
   return { prNumber: existing[0].number, created: false };
 }
@@ -355,9 +366,7 @@ export async function openFindingsBatchPr(
   const created = await client.createPull({
     owner,
     repo,
-    title:
-      `vibeCompact findings — ${batch.date}` +
-      (batch.anchor ? ` (anchor ${batch.anchor.slice(0, 12)})` : ""),
+    title: batchTitle(batch),
     head: AUDIT_DATA_BRANCH,
     base,
     body: batchBody(briefing, batch),

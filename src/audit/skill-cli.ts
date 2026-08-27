@@ -131,12 +131,37 @@ verdicts with reasons while you work, and present the batch to the
 maintainer at the end for one approval. After approval:
 
 \`\`\`sh
-${cli} wontfix  "<lane>:<path>" --reason "..."   # real, accepted forever
-${cli} noise    "<lane>:<path>" --reason "..."   # finding is wrong
-${cli} justify  "<lane>:<path>" --reason "..."   # not a problem now
+${cli} wontfix      "<lane>:<path>" --reason "..."   # real, accepted forever
+${cli} justify      "<lane>:<path>" --reason "..."   # not a problem now
+${cli} noise        "<lane>:<path>" --reason "..."   # wrong for THIS file
+${cli} detector-gap "<lane>:<path>" --reason "..." --mechanism <class>
 \`\`\`
 
-Fingerprints are \`<lane>:<path>\`, one verdict per lane per file.
+**Which of \`noise\` and \`detector-gap\`?** Use \`noise\` when the
+finding is wrong about this file specifically. Use \`detector-gap\` when
+the detector is mechanically incapable of seeing how the code is
+reached — a decorator-registered handler, an \`.astro\` island mount, a
+Playwright suite in another language, a \`.js\` specifier resolving to a
+\`.ts\` source. \`detector-gap\` suppresses exactly like noise but
+**never ratchets the lane floor**, so reporting a tool defect can never
+desensitise a lane for your repo. \`--mechanism\` is one of:
+\`cross-language-coverage\`, \`decorator-registration\`,
+\`module-resolution\`, \`template-mount\`, \`convention-loading\`,
+\`published-surface\`, \`measurement\`, \`other\` — it is what
+\`${cli} fleet-report\` ranks across repos.
+
+**One decision can cover a class.** Fingerprints accept patterns:
+
+\`\`\`sh
+${cli} justify "arrival:frontend/**/*.tsx" --reason "covered by the e2e suite the lane cannot see"
+${cli} wontfix "*:src/pages/Frozen.tsx"    --reason "frozen; retired feature"
+\`\`\`
+
+A glob answers a whole file class once instead of once per file, and a
+\`*\` lane accepts the file on every lane so a decision cannot be
+escaped by a different lane firing on the same file. The most specific
+verdict wins (exact beats glob; a named lane beats \`*\`).
+
 Each command appends to \`${LEDGER_PATH}\` and commits locally; push
 through the repo's normal path.
 
@@ -152,9 +177,13 @@ the fold's ordering and dedup.
   verdicts on one lane raise that lane's firing bar for this repo**
   (reversible: \`${cli} floors reset <lane>\`). Recurring *mechanical*
   false positives are detector bugs — report, don't ratchet.
+- \`detector-gap\` — suppressed forever, **never ratchets**; carries a
+  mechanism class and is aggregated fleet-wide by \`${cli} fleet-report\`.
 - \`justified\` — suppressed; expires after ${JUSTIFIED_MAX_AGE_DAYS}
-  days (re-affirm with the same command) and hard-reopens if the file
-  grows >${JUSTIFIED_GROWTH_PCT}%.
+  days (re-affirm with the same command). It hard-reopens if the file
+  grows >${JUSTIFIED_GROWTH_PCT}% **only on size-premised lanes** — a
+  config file that doubled is still unreachable by any test import, so
+  structural reasoning is not invalidated by line count.
 - \`fixed\`/\`firing\` — machine-stamped, never filed by hand.
 - Wrong verdict? File the correcting one — latest per fingerprint wins.
 

@@ -37,6 +37,8 @@ Commands:
   justify     Record a justified verdict for an audit finding
   wontfix     Record a wontfix verdict for an audit finding
   noise       Record a noise verdict for an audit finding
+  detector-gap  Record that a finding is mechanically wrong (never ratchets)
+  fleet-report  Aggregate detector-gap claims across sibling repos
   ledger      Inspect the audit decision ledger (ledger show)
   floors      Manage attested lane floors (floors reset <lane>)
   apply-run   Apply a CI run's ledger events from an artifact file
@@ -114,8 +116,10 @@ switch (command) {
   case "justify":
   case "wontfix":
   case "noise":
+  case "detector-gap":
   case "ledger":
   case "floors":
+  case "fleet-report":
   case "apply-run":
     runScript("audit/ledger-cli.ts", args);
     break;

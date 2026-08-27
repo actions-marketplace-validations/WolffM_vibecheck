@@ -19,12 +19,17 @@ import {
   readLedger,
   resolveVerdict,
   floorsForScoring,
+  GROWTH_SENSITIVE_LANES,
+  isPatternFingerprint,
+  laneOf,
   JUSTIFIED_GROWTH_PCT,
   JUSTIFIED_MAX_AGE_DAYS,
+  type DetectorMechanism,
   type HumanVerdict,
   type LedgerEvent,
   type VerdictEvent,
 } from "./ledger.js";
+import { runFleetReport } from "./fleet-report.js";
 import { runScc } from "./runners/scc.js";
 
 function git(rootPath: string, args: string[]): string {
@@ -69,7 +74,7 @@ export function recordVerdict(
   verdict: HumanVerdict,
   fingerprint: string,
   reason: string,
-  options: VerdictCliOptions = {},
+  options: VerdictCliOptions & { mechanism?: DetectorMechanism } = {},
 ): VerdictEvent {
   if (!fingerprint.includes(":")) {
     throw new Error(
@@ -82,9 +87,16 @@ export function recordVerdict(
     verdict,
     fingerprint,
     reason,
+    ...(options.mechanism ? { mechanism: options.mechanism } : {}),
   };
 
-  if (verdict === "justified") {
+  // A pattern fingerprint has no single file to measure, and growth only
+  // invalidates size-premised lanes anyway.
+  if (
+    verdict === "justified" &&
+    !isPatternFingerprint(fingerprint) &&
+    GROWTH_SENSITIVE_LANES.has(laneOf(fingerprint))
+  ) {
     // Baseline enables growth invalidation; captured best-effort.
     const scc = runScc(rootPath);
     const codeLines = scc.files.find(
@@ -230,6 +242,7 @@ async function main(): Promise<void> {
   const [verb, ...rest] = process.argv.slice(2);
   let rootPath = process.cwd();
   let reason = "";
+  let mechanism: string | undefined;
   let push = false;
   let file: string | undefined;
   const positional: string[] = [];
@@ -238,6 +251,7 @@ async function main(): Promise<void> {
     const arg = rest[i];
     if (arg === "--root" && rest[i + 1]) rootPath = rest[++i];
     else if (arg === "--reason" && rest[i + 1]) reason = rest[++i];
+    else if (arg === "--mechanism" && rest[i + 1]) mechanism = rest[++i];
     else if (arg === "--file" && rest[i + 1]) file = rest[++i];
     else if (arg === "--push") push = true;
     else positional.push(arg);
@@ -246,11 +260,14 @@ async function main(): Promise<void> {
   switch (verb) {
     case "justify":
     case "wontfix":
-    case "noise": {
-      const verdict: HumanVerdict = verb === "justify" ? "justified" : verb;
+    case "noise":
+    case "detector-gap": {
+      const verdict: HumanVerdict =
+        verb === "justify" ? "justified" : (verb as HumanVerdict);
       const fingerprint = requireArg(
         positional[0],
-        `vibecheck ${verb} <lane>:<path> --reason "..." [--push]`,
+        `vibecheck ${verb} <lane>:<path> --reason "..." [--push]` +
+          (verb === "detector-gap" ? " [--mechanism <class>]" : ""),
       );
       if (!reason) {
         console.error(`A --reason is required for ${verb} verdicts.`);
@@ -258,6 +275,7 @@ async function main(): Promise<void> {
       }
       const event = recordVerdict(rootPath, verdict, fingerprint, reason, {
         push,
+        ...(mechanism ? { mechanism: mechanism as DetectorMechanism } : {}),
       });
       console.log(`Recorded ${verdict} for ${fingerprint} (${event.id}).`);
       break;
@@ -276,6 +294,11 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       resetFloor(rootPath, positional[1], { push });
+      break;
+    }
+    case "fleet-report": {
+      const scanDir = positional[0];
+      process.stdout.write(runFleetReport(rootPath, scanDir));
       break;
     }
     case "apply-run": {

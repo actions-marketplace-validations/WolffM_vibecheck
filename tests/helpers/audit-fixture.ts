@@ -149,6 +149,7 @@ export function fixtureResult(rootPath = "/tmp/fixture"): AuditRunResult {
       reopened: ["size:src/grew.ts"],
       stampedEvents: 3,
       improving: { "size:src/dumped.ts": 18 },
+      newSinceAcknowledged: ["size:src/dumped.ts"],
     },
     saturatedLanes: {},
     coverageGaps: [],
