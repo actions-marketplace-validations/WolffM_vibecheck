@@ -87,19 +87,27 @@
         "knip": {
           "$ref": "#/definitions/toolConfigWithPath"
         },
+        "opengrep": {
+          "allOf": [
+            { "$ref": "#/definitions/toolConfig" },
+            {
+              "properties": {
+                "config_path": {
+                  "type": "string",
+                  "description": "Path to local opengrep rules"
+                }
+              }
+            }
+          ]
+        },
         "semgrep": {
           "allOf": [
             { "$ref": "#/definitions/toolConfig" },
             {
               "properties": {
-                "config": {
+                "config_path": {
                   "type": "string",
-                  "default": "p/default",
-                  "description": "Semgrep config to use"
-                },
-                "rules_path": {
-                  "type": "string",
-                  "description": "Path to local semgrep rules"
+                  "description": "Deprecated alias for opengrep"
                 }
               }
             }
@@ -196,10 +204,88 @@
           "description": "Branch prefix for agent-created PRs"
         }
       }
+    },
+    "audit": {
+      "type": "object",
+      "description": "vibeCheck Audit (mode: audit) configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the audit"
+        },
+        "dynamic_tests": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the dynamic test tier (mutation testing; off in M1)"
+        },
+        "report_channel": {
+          "type": "string",
+          "enum": ["issue", "pr"],
+          "default": "issue",
+          "description": "Where the action publishes the report. \"issue\" (default) keeps a standing living issue, updated in place and never closed. \"pr\" opts out of that issue entirely — the episodic findings PR becomes the only report surface, so between triaged batches nothing is left open."
+        },
+        "max_report_items": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 1,
+          "description": "Maximum worst-offender entries in the report"
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Extra excluded path prefixes (e.g. backend/custom_nodes)"
+        },
+        "size_tiers": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "minItems": 3,
+          "maxItems": 3,
+          "default": [500, 1000, 2000],
+          "description": "Ascending code-line boundaries for size tiers 1/2/3"
+        },
+        "lanes": {
+          "type": "object",
+          "description": "Per-lane configuration",
+          "properties": {
+            "size": { "$ref": "#/definitions/auditLane" },
+            "arrival": { "$ref": "#/definitions/auditLane" },
+            "deadcode": { "$ref": "#/definitions/auditLane" },
+            "smells": { "$ref": "#/definitions/auditLane" },
+            "duplication": {
+              "allOf": [
+                { "$ref": "#/definitions/auditLane" },
+                {
+                  "properties": {
+                    "min_lines": {
+                      "type": "integer",
+                      "default": 30,
+                      "minimum": 1,
+                      "description": "Minimum duplicate-block size in lines"
+                    }
+                  }
+                }
+              ]
+            },
+            "consistency": { "$ref": "#/definitions/auditLane" }
+          }
+        }
+      }
     }
   },
   "required": ["version"],
   "definitions": {
+    "auditLane": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable this audit lane"
+        }
+      }
+    },
     "toolEnablement": {
       "oneOf": [
         { "type": "boolean" },

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck & test
+    # HOSTED, DELIBERATELY — do not point this workflow at the self-hosted
+    # builder, and do not restore the `vars.CI_RUNNER || ...` fallback here.
+    #
+    # This repo is public and this is the only fork-triggerable workflow
+    # (`pull_request` above). The workflow file comes from the base branch, so a
+    # fork cannot edit these steps — but `pnpm install` and the `pnpm run` gates
+    # execute scripts out of the PR's own package.json. On the self-hosted
+    # builder that is arbitrary code as the runner's user, with its home
+    # directory, credentials and other checkouts in reach.
+    #
+    # Hardcoded rather than defaulted because `CI_RUNNER` is a plausible thing
+    # to set for speed later, and doing so would silently reopen that path.
+    # vibecheck.yml / vibecompact.yml are not fork-reachable and still honour
+    # CI_RUNNER.
+    # Runner SELECTION, not a job-level `if:`. Skipping the job would make a
+    # required check that never reports, so a fork PR could never merge. This
+    # keeps it always-running while an unauthorized fork PR lands on
+    # GitHub-hosted (free here) instead of a claw — a persistent machine on a
+    # home LAN. author_association is computed by GitHub, not the submitter.
+    # Runner SELECTION, not a job-level `if:`. Skipping the job would make a
+    # required check that never reports, so a fork PR could never merge. This
+    # keeps it always-running while an unauthorized fork PR lands on
+    # GitHub-hosted (free here) instead of a claw — a persistent machine on a
+    # home LAN. author_association is computed by GitHub, not the submitter.
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) && '["ubuntu-latest"]') || vars.CI_RUNNER) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      # pnpm via corepack, pinned by the `packageManager` field in package.json.
+      # Replaces pnpm/action-setup, whose self-installer shares one directory
+      # across every runner instance on the host and dies with
+      # `ENOENT ... uv_cwd` when concurrent jobs race it.
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.5.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm test

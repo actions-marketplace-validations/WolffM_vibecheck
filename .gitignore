@@ -45,3 +45,15 @@ coverage/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Chainlink tooling cache
+.chainlink/
+
+# vibeCheck audit working artifacts (regenerable; ledger + trends stay tracked)
+.vibecompact/audit.md
+.vibecompact/out/
+
+# Per-machine agent permissions. Machine-local by name and by nature — 44 of the
+# 50 repos here already ignore it; the handful that tracked it reported
+# "uncommitted changes" on every nightly repo sync, forever.
+.claude/settings.local.json

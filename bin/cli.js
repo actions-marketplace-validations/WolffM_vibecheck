@@ -5,6 +5,7 @@
  *
  * Usage:
  *   vibecheck analyze [options]
+ *   vibecheck audit [options]
  *   vibecheck detect [path]
  *
  * Examples:
@@ -32,8 +33,23 @@ Usage:
 
 Commands:
   analyze     Run static analysis on a repository
+  audit       Run the code-quality audit (writes .vibecheck/audit.md)
+  justify     Record a justified verdict for an audit finding
+  wontfix     Record a wontfix verdict for an audit finding
+  noise       Record a noise verdict for an audit finding
+  detector-gap  Record that a finding is mechanically wrong (never ratchets)
+  fleet-report  Aggregate detector-gap claims across sibling repos
+  ledger      Inspect the audit decision ledger (ledger show)
+  floors      Manage attested lane floors (floors reset <lane>)
+  apply-run   Apply a CI run's ledger events from an artifact file
+  gate        Evaluate the audit activity gate (prints active=true|false)
+  triage      Walk audit findings interactively, filing verdicts + briefing
+  skill       Emit the vibeCompact agent skill (skill emit [--dir <dir>])
   detect      Detect repository profile (languages, tools)
   help        Show this help message
+
+Audit verdict usage:
+  vibecheck justify|wontfix|noise <lane>:<path> --reason "..." [--push]
 
 Options for 'analyze':
   --root <path>              Root path to analyze (default: current directory)
@@ -65,10 +81,14 @@ Documentation: https://github.com/WolffM/vibecheck
 `);
 }
 
+// Resolve tsx against this package, not the cwd — the CLI runs from
+// arbitrary target repos that don't have tsx installed.
+const tsxImport = import.meta.resolve("tsx");
+
 function runScript(scriptPath, scriptArgs = []) {
   const fullPath = join(srcDir, scriptPath);
 
-  const child = spawn("node", ["--import", "tsx", fullPath, ...scriptArgs], {
+  const child = spawn("node", ["--import", tsxImport, fullPath, ...scriptArgs], {
     stdio: "inherit",
     env: process.env,
   });
@@ -87,6 +107,38 @@ function runScript(scriptPath, scriptArgs = []) {
 switch (command) {
   case "analyze":
     runScript("core/analyze.ts", args.slice(1));
+    break;
+
+  case "audit":
+    runScript("audit/cli.ts", args.slice(1));
+    break;
+
+  case "justify":
+  case "wontfix":
+  case "noise":
+  case "detector-gap":
+  case "ledger":
+  case "floors":
+  case "fleet-report":
+  case "apply-run":
+    runScript("audit/ledger-cli.ts", args);
+    break;
+
+  case "gate":
+    runScript("audit/gate-cli.ts", args.slice(1));
+    break;
+
+  case "triage":
+    runScript("audit/triage-cli.ts", args.slice(1));
+    break;
+
+  case "skill":
+    runScript("audit/skill-cli.ts", args.slice(1));
+    break;
+
+  // Dev-only validation harness (design §10); deliberately not in help.
+  case "backtest":
+    runScript("audit/backtest.ts", args.slice(1));
     break;
 
   case "detect":

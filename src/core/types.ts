@@ -33,9 +33,8 @@ interface ToolConfig {
   [key: string]: unknown;
 }
 
-interface TscConfig extends ToolConfig {
-  // inherits enabled
-}
+// TscConfig has no extra fields; it just inherits `enabled` from ToolConfig.
+type TscConfig = ToolConfig;
 
 interface EslintConfig extends ToolConfig {
   config_path?: string;
@@ -58,9 +57,8 @@ interface KnipConfig extends ToolConfig {
   config_path?: string;
 }
 
-interface SemgrepConfig extends ToolConfig {
-  config?: string;
-  rules_path?: string;
+interface OpengrepConfig extends ToolConfig {
+  config_path?: string; // Path to local opengrep rules
 }
 
 // Python tool configs
@@ -105,9 +103,8 @@ interface ClippyConfig extends ToolConfig {
   all_targets?: boolean; // Check all targets
 }
 
-interface CargoAuditConfig extends ToolConfig {
-  // No additional config options needed
-}
+// CargoAuditConfig has no extra fields beyond the shared ToolConfig.
+type CargoAuditConfig = ToolConfig;
 
 interface CargoDenyConfig extends ToolConfig {
   config_path?: string;
@@ -121,7 +118,9 @@ export interface ToolsConfig {
   jscpd?: JscpdConfig;
   dependency_cruiser?: DependencyCruiserConfig;
   knip?: KnipConfig;
-  semgrep?: SemgrepConfig;
+  opengrep?: OpengrepConfig;
+  /** @deprecated Legacy alias for opengrep (vibeCheck used Semgrep before v-next) */
+  semgrep?: OpengrepConfig;
   // Python tools
   ruff?: RuffConfig;
   mypy?: MypyConfig;
@@ -192,6 +191,47 @@ export interface AutofixConfig {
   [tool: string]: Partial<AutofixToolConfig> | false;
 }
 
+export interface AuditLaneConfig {
+  enabled?: boolean;
+}
+
+export interface AuditDuplicationLaneConfig extends AuditLaneConfig {
+  min_lines?: number;
+}
+
+export interface AuditLanesConfig {
+  size?: AuditLaneConfig;
+  arrival?: AuditLaneConfig;
+  deadcode?: AuditLaneConfig;
+  duplication?: AuditDuplicationLaneConfig;
+  smells?: AuditLaneConfig;
+  consistency?: AuditLaneConfig;
+}
+
+export interface AuditConfig {
+  enabled?: boolean;
+  dynamic_tests?: boolean;
+  report_channel?: "issue" | "pr";
+  max_report_items?: number;
+  /** Ascending code-line boundaries for size tiers 1/2/3. */
+  size_tiers?: number[];
+  /** Extra excluded path prefixes (e.g. "backend/custom_nodes"). */
+  exclude?: string[];
+  /**
+   * Directories holding the JS/TS project(s) knip and type-coverage
+   * should run from (e.g. ["frontend"]). Defaults to auto-discovery of
+   * tracked package.json locations when the repo root has none.
+   */
+  js_roots?: string[];
+  /**
+   * Findings-PR lifecycle. "episodic" (default): a batch PR opens only
+   * when new findings fired since the last acknowledged (closed) one.
+   * "never": deliver via the data branch and living issue only.
+   */
+  data_pr?: "episodic" | "never";
+  lanes?: AuditLanesConfig;
+}
+
 export interface VibeCopConfig {
   version: number;
   schedule?: ScheduleConfig;
@@ -201,6 +241,7 @@ export interface VibeCopConfig {
   output?: OutputConfig;
   llm?: LlmConfig;
   autofix?: AutofixConfig;
+  audit?: AuditConfig;
 }
 
 /**
@@ -234,6 +275,7 @@ export type Language =
   | "go"
   | "rust"
   | "java"
+  | "kotlin"
   | "other";
 export type PackageManager = "npm" | "yarn" | "pnpm" | "bun" | "unknown";
 
@@ -249,9 +291,10 @@ export interface RepoProfile {
   hasDependencyCruiser: boolean;
   hasKnip: boolean;
   rootPath: string;
-  // Python/Java detection
+  // Python/Java/Kotlin detection
   hasPython: boolean;
   hasJava: boolean;
+  hasKotlin: boolean;
   hasRuff: boolean;
   hasMypy: boolean;
   hasPmd: boolean;
@@ -302,12 +345,14 @@ export type KnownToolName =
   // Java
   | "pmd"
   | "spotbugs"
+  // Kotlin
+  | "detekt"
   // Rust
   | "clippy"
   | "cargo-audit"
   | "cargo-deny"
   // Security
-  | "semgrep"
+  | "opengrep"
   // Trunk meta-linter (and common sub-linters)
   | "trunk"
   | "markdownlint"
